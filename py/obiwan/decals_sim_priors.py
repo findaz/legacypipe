@@ -101,7 +101,7 @@ class KernelOfTruth(object):
             print('Wrote %s' % savenm)
 
     # 2D scatterplot of selected dims of KDE
-    def plot_indiv_2d(self,xy_names,xy_lims=None, ndraws=1000,prefix=''):
+    def plot_indiv_2d(self,xy_names,xy_lims=None, ndraws=1000,prefix='',outdir=None):
         samp= self.kde.sample(n_samples=ndraws)
         for i,_ in enumerate(xy_names):
             xname= xy_names[i][0]
@@ -124,11 +124,13 @@ class KernelOfTruth(object):
                     ax[cnt].set_ylim(xy_lims[i][1])
             ax[cnt].legend(loc='upper right')
             savenm= 'kde_2d_%s_%s_%s.png' % (prefix,xname,yname)
+            if outdir:
+                savenm= os.path.join(outdir,savenm)
             plt.savefig(savenm,bbox_extra_artists=[xlab,ylab], bbox_inches='tight',dpi=150)
             plt.close()
             print('Wrote %s' % savenm)
 
-    def plot_FDR_using_kde(self,obj='LRG',ndraws=1000,prefix=''):
+    def plot_FDR_using_kde(self,obj='LRG',ndraws=1000,prefix='',outdir=None):
         assert(obj in ['LRG','ELG'])
         for use_data in [True,False]:
             fig,ax = plt.subplots()
@@ -171,6 +173,8 @@ class KernelOfTruth(object):
                 xlab=ax.set_xlabel('r-z')
                 ylab=ax.set_ylabel('g-r')
             ax.set_aspect(1)
+            if outdir:
+                savenm= os.path.join(outdir,savenm)
             plt.savefig(savenm,bbox_extra_artists=[xlab,ylab], bbox_inches='tight',dpi=150)
             plt.close()
             print('Wrote %s' % savenm)
@@ -623,6 +627,8 @@ class CommonInit(ReadWrite):
         self.kdefn= kwargs.get('kdefn','kde.pickle')
         self.loadkde= kwargs.get('loadkde',False)
         self.savekde= kwargs.get('savekde',False)
+        # 
+        self.outdir= kwargs.get('outdir','./')
 
     def imaging_cut(self,data):
         '''data is a fits_table object with Tractor Catalogue columns'''
@@ -779,8 +785,10 @@ class ELG(CommonInit):
         print('ELGs, self.rlimit= ',self.rlimit)
         # KDE params
         self.kdefn= 'elg-kde.pickle'
-        self.kde_shapes_fn= 'elg-shapes-kde.pickle'
-        self.kde_colors_shapes_fn= 'elg-colors-shapes-kde.pickle'
+        #self.kde_shapes_fn= 'elg-shapes-kde.pickle'
+        #self.kde_colors_shapes_fn= 'elg-colors-shapes-kde.pickle'
+        for attr in ['kdefn']:
+            setattr(self,attr, os.path.join(self.outdir,getattr(self,attr)) )
 
     def get_dr3_deep2(self):
         '''version 3.0 of data discussed in
@@ -794,7 +802,7 @@ class ELG(CommonInit):
             zcat = self.read_fits(os.path.join(self.truth_dir,'deep2f234-dr3matched.fits'))
             decals = self.read_fits(os.path.join(self.truth_dir,'dr3-deep2f234matched.fits'))
             # Add mag data 
-            CatalogueFuncs().set_mags(decals)
+            CatalogueFuncs().set_mags_OldDataModel(decals)
             rflux= decals.get('decam_flux_nodust')[:,2]
             rmag_cut= rflux > 10**((22.5-self.rlimit)/2.5)
             rmag_cut*= self.imaging_cut(decals)
@@ -888,7 +896,7 @@ class ELG(CommonInit):
         tab.cut(keep)
         print('dr3_deep2, after cut bad vals %d' % len(tab))
         # Sanity plots
-        plot_tractor_shapes(tab,prefix='ELG_dr3deep2_expdev')
+        plot_tractor_shapes(tab,prefix='ELG_dr3deep2_expdev',outdir=self.outdir)
         print('size %d %d' % (len(tab),len(tab[tab.tractor_re > 0.])))
         tab.cut( tab.tractor_re > 0. )
         xy_names= [('tractor_re','zhelio'),
@@ -902,7 +910,7 @@ class ELG(CommonInit):
         #           ('tractor_re','r_wdust'),
         #           ('tractor_re','g_wdust'),
         #           ('tractor_re','z_wdust')]
-        plot_indiv_2d(tab,xy_names=xy_names,xy_lims=None, ndraws=1000,prefix='ELG_dr3deep2')
+        plot_indiv_2d(tab,xy_names=xy_names,xy_lims=None, ndraws=1000,prefix='ELG_dr3deep2',outdir=self.outdir)
         # KDE
         labels=['r_wdust','rz','gr','zhelio','tractor_re']
                 #'re','n','ba','pa']
@@ -913,7 +921,7 @@ class ELG(CommonInit):
                                 tab.tractor_re],
                                labels,lims,\
                                bandwidth=0.05,kernel='tophat',\
-                               kdefn=self.kde_shapes_fn,loadkde=self.loadkde)
+                               kdefn=self.kdefn,loadkde=self.loadkde)
         xy_names= [('rz','gr'),
                    ('tractor_re','gr'),
                    ('tractor_re','r_wdust'),
@@ -932,7 +940,7 @@ class ELG(CommonInit):
                   ([0.6,1.6],[0,2]),  
                  ]
         #kde_obj.plot_indiv_2d(xy_names,xy_lims=xy_lims, ndraws=10000,prefix='ELG_dr3deep2')
-        kde_obj.plot_FDR_using_kde(obj='ELG',ndraws=10000,prefix='dr3deep2')
+        kde_obj.plot_FDR_using_kde(obj='ELG',ndraws=10000,prefix='dr3deep2',outdir=self.outdir)
 #        xylims=dict(x1=(20.5,25.5),y1=(0,0.8),\
 #                    x2=xyrange['x_elg'],y2=xyrange['y_elg'],\
 #                    x3=(0.6,1.6),y3=(0.,1.0),
@@ -943,9 +951,12 @@ class ELG(CommonInit):
         #kde_obj.plot_1band_and_color(ndraws=1000,xylims=xylims,prefix='elg_')
         #kde_obj.plot_colors_shapes_z(ndraws=1000,xylims=xylims,name='elg_colors_shapes_z_kde.png')
         if self.savekde:
-            if os.path.exists(self.kde_colors_shapes_fn):
-                os.remove(self.kde_colors_shapes_fn)
-            kde_obj.save(name=self.kde_colors_shapes_fn)
+            #if os.path.exists(self.kde_colors_shapes_fn):
+            #    os.remove(self.kde_colors_shapes_fn)
+            #kde_obj.save(name=self.kde_colors_shapes_fn)
+            if os.path.exists(self.kdefn):
+                os.remove(self.kdefn)
+            kde_obj.save(name=self.kdefn)
 
  
     def cross_validate_redshift(self):
@@ -1291,8 +1302,9 @@ class ELG(CommonInit):
 # Returns re,n measured by tractor given a Tractor Cataluge
 def get_tractor_shapes(cat):
     d= {}
-    for key in ['re','n']:
+    for key in ['re','n','ba','pa']:
         d[key]= np.zeros(len(cat))-1
+    # Re,N
     # SIMP
     #keep= (cat.type == 'SIMP') * (cat.shapeexp_r > 0.)
     #d['re'][keep]= cat.shapeexp_r[keep]
@@ -1305,9 +1317,12 @@ def get_tractor_shapes(cat):
     keep= (cat.type == 'DEV') * (cat.shapedev_r > 0.)
     d['re'][keep]= cat.shapedev_r[keep]
     d['n'][keep]= 4.
+    # BA, PA
+    d['ba']= np.random.uniform(0.2,1.,size=len(cat))
+    d['pa']= np.random.uniform(0.,180.,size=len(cat))
     return d
 
-def plot_tractor_shapes(cat,prefix=''):
+def plot_tractor_shapes(cat,prefix='',outdir=None):
     for name,rng in zip(['tractor_re','tractor_n'],
                         [(0,2),(1,4)]):
         fig,ax= plt.subplots()
@@ -1319,6 +1334,8 @@ def plot_tractor_shapes(cat,prefix=''):
         xlab= ax.set_xlabel(name)
         ylab= ax.set_ylabel('PDF')
         savenm= 'tractor_%s_%s.png' % (prefix,name)
+        if outdir:
+            savenm= os.path.join(outdir,savenm)
         plt.savefig(savenm,bbox_extra_artists=[xlab,ylab], bbox_inches='tight',dpi=150)
         plt.close()
         print('Wrote %s' % savenm)
@@ -1338,7 +1355,7 @@ def plot_tractor_galfit_shapes(cat,prefix=''):
         print('Wrote %s' % savenm)
  
 # 2D plots
-def plot_indiv_2d(tab,xy_names=None,xy_lims=None, ndraws=1000,prefix=''):
+def plot_indiv_2d(tab,xy_names=None,xy_lims=None, ndraws=1000,prefix='',outdir=None):
     assert(xy_names)
     for i,_ in enumerate(xy_names):
         xname= xy_names[i][0]
@@ -1353,6 +1370,8 @@ def plot_indiv_2d(tab,xy_names=None,xy_lims=None, ndraws=1000,prefix=''):
             ax.set_xlim(xy_lims[i][0])
             ax.set_ylim(xy_lims[i][1])
         savenm= 'plot_2d_%s_%s_%s.png' % (prefix,xname,yname)
+        if outdir:
+            savenm= os.path.join(outdir,savenm)
         plt.savefig(savenm,bbox_extra_artists=[xlab,ylab], bbox_inches='tight',dpi=150)
         plt.close()
         print('Wrote %s' % savenm)
@@ -1365,7 +1384,9 @@ class LRG(CommonInit):
         print('LRGs, self.zlimit= ',self.zlimit)
         # KDE params
         self.kdefn= 'lrg-kde.pickle'
-        self.kde_shapes_fn= 'lrg-shapes-kde.pickle'
+        #self.kde_shapes_fn= 'lrg-shapes-kde.pickle'
+        for attr in ['kdefn']:
+            setattr(self,attr, os.path.join(self.outdir,getattr(self,attr)) )
 
     def get_dr3_cosmos(self):
         # Cosmos
@@ -1378,7 +1399,7 @@ class LRG(CommonInit):
             decals=self.read_fits( os.path.join(self.truth_dir,'dr3-cosmoszphotmatched.fits') )
             spec=self.read_fits( os.path.join(self.truth_dir,'cosmos-zphot-dr3matched.fits') )
         # DECaLS
-        CatalogueFuncs().set_mags(decals)
+        CatalogueFuncs().set_mags_OldDataModel(decals)
         Z_FLUX = decals.get('decam_flux_nodust')[:,4]
         W1_FLUX = decals.get('wise_flux_nodust')[:,0]
         # Cuts
@@ -1447,7 +1468,8 @@ class LRG(CommonInit):
             tab= self.get_dr3_cosmos()
         print('dr3_cosmos %d' % len(tab))
         # Add tractor shapes
-        dic= get_tractor_shapes(tab) 
+        dic= get_tractor_shapes(tab)
+        # WARNING: not actually using 'pa, ba, n' for KDE 
         tab.set('tractor_re', dic['re'])
         tab.set('tractor_n', dic['n'])
         # Cuts
@@ -1469,7 +1491,7 @@ class LRG(CommonInit):
         tab.cut(tab.zp_gal - bandwidth >= 0.)
         print('dr3_cosmos after redshift > %f: %d' % (bandwidth,len(tab)))
         # Sanity plot
-        plot_tractor_shapes(tab,prefix='LRG_dr3cosmos_expdev')
+        plot_tractor_shapes(tab,prefix='LRG_dr3cosmos_expdev',outdir=self.outdir)
         print('size %d %d' % (len(tab),len(tab[tab.tractor_re > 0.])))
         #plot_tractor_galfit_shapes(tab,prefix='LRG_dr3cosmosacs')
         tab.cut(tab.tractor_re > 0.)
@@ -1477,7 +1499,7 @@ class LRG(CommonInit):
                    ('tractor_re','g_wdust'),
                    ('tractor_re','r_wdust'),
                    ('tractor_re','z_wdust')]
-        plot_indiv_2d(tab,xy_names=xy_names, ndraws=1000,prefix='LRG')
+        plot_indiv_2d(tab,xy_names=xy_names, ndraws=1000,prefix='LRG',outdir=self.outdir)
         # KDE
         names= ['z_wdust','rz','rw1','zp_gal','g_wdust','tractor_re']
                 #'re','n','ba','pa']
@@ -1511,8 +1533,8 @@ class LRG(CommonInit):
                   ([0.,2.],[17,22]),  
                   ([0.,2.],[-2,5]) 
                  ]
-        kde_obj.plot_indiv_2d(xy_names,xy_lims=xy_lims, ndraws=10000,prefix='lrg_dr3cosmosacs')
-        kde_obj.plot_FDR_using_kde(obj='LRG',ndraws=10000,prefix='dr3cosmos')
+        kde_obj.plot_indiv_2d(xy_names,xy_lims=xy_lims, ndraws=10000,prefix='lrg_dr3cosmosacs',outdir=self.outdir)
+        kde_obj.plot_FDR_using_kde(obj='LRG',ndraws=10000,prefix='dr3cosmos',outdir=self.outdir)
         #plotlims= [(17.,22.),(0,2.5),(-2,5.),(0.,1.6),(17.,29),(-0.5,2.)] #,(-2,10.),(-0.2,1.2),(-20,200)]
         #kde_obj.plot_1band_and_color(ndraws=1000,xylims=xylims,prefix='lrg_')
         #kde_obj.plot_1band_color_and_redshift(ndraws=1000,xylims=xylims,prefix='lrg_')
@@ -1741,7 +1763,7 @@ class LRG(CommonInit):
         elif self.DR == 3:
             decals = self.read_fits(os.path.join(self.truth_dir,'dr3-vipersw1w4matched.fits'))
             vip = self.read_fits(os.path.join(self.truth_dir,'vipersw1w4-dr3matched.fits'))
-        CatalogueFuncs().set_mags(decals)
+        CatalogueFuncs().set_mags_OldDataModel(decals)
         Z_FLUX = decals.get('decam_flux_nodust')[:,4]
         W1_FLUX = decals.get('wise_flux_nodust')[:,0]
         index={}
@@ -1860,6 +1882,8 @@ class STAR(CommonInit):
         super(STAR,self).__init__(**kwargs)
         # KDE params
         self.kdefn= 'star-kde.pickle'
+        for attr in ['kdefn']:
+            setattr(self,attr, os.path.join(self.outdir,getattr(self,attr)) )
     
     def get_sweepstars(self):
         '''Model the g-r, r-z color-color sequence for stars'''
@@ -1909,7 +1933,7 @@ class STAR(CommonInit):
         # https://desi.lbl.gov/trac/wiki/TargetSelectionWG/TargetSelection#SpectrophotometricStandardStarsFSTD
         if self.DR == 2:
             stars=fits_table(os.path.join(self.truth_dir,'Stars_str82_355_4.DECaLS.dr2.fits'))
-            CatalogueFuncs().set_mags(stars)
+            CatalogueFuncs().set_mags_OldDataModel(stars)
             stars.cut( self.std_star_cut(stars) )
             return stars
         elif self.DR == 3:
@@ -1946,12 +1970,14 @@ class QSO(CommonInit):
         print('QSOs, self.rlimit= ',self.rlimit)
         # KDE params
         self.kdefn= 'qso-kde.pickle'
+        for attr in ['kdefn']:
+            setattr(self,attr, os.path.join(self.outdir,getattr(self,attr)) )
   
     def get_qsos(self):
         if self.DR == 2:        
             qsos= self.read_fits( os.path.join(self.truth_dir,'AllQSO.DECaLS.dr2.fits') )
             # Add AB mags
-            CatalogueFuncs().set_mags(qsos)
+            CatalogueFuncs().set_mags_OldDataModel(qsos)
             qsos.cut( self.imaging_cut(qsos) )
             # r < 22.7, grz > 17
             GFLUX = qsos.get('decam_flux_nodust')[:,1] 
@@ -1966,7 +1992,7 @@ class QSO(CommonInit):
             raise ValueError('Not done yet')
             qsos=self.read_fits( os.path.join(self.truth_dir,'qso-dr3sweepmatched.fits') )
             decals=self.read_fits( os.path.join(self.truth_dir,'dr3-qsosweepmatched.fits') )
-            CatalogueFuncs().set_mags(decals)
+            CatalogueFuncs().set_mags_OldDataModel(decals)
             decals.set('z',qsos.get('z'))
             decals.cuts( self.imaging_cut(decals) )
             return decals
@@ -2134,11 +2160,23 @@ class GalaxyPrior(object):
         self.lrg.plot()
         self.elg.plot()
 
+def get_parser():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,\
+                                     description='Generate a legacypipe-compatible CCDs file \
+                                                  from a set of reduced imaging.')
+    parser.add_argument('--outdir',action='store',default='./',help='where to write KDE fits and QA plots',required=False)
+    return parser
+ 
+
 if __name__ == '__main__':
+    import argparse
+    parser= get_parser()
+    args = parser.parse_args()
+
     #gals=GalaxyPrior()
     #gals.plot_all()
     #print "gals.__dict__= ",gals.__dict__
-    kwargs=dict(DR=2,savefig=True,alpha=0.25,
+    kwargs=dict(DR=2,outdir=args.outdir,savefig=True,alpha=0.25,
                 loadkde=False,
                 savekde=True)
     #star=STAR(**kwargs)

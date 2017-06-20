@@ -150,6 +150,55 @@ def get_radec(radec,\
     DEC  = 90-np.arccos(cmin+u2*(cmax-cmin))*180./np.pi
     return RA,DEC
 
+class KdeSample(object):
+    def __init__(self,objtype='star',pickle_dir='./'):
+        self.objtype= objtype
+        self.kdefn=os.path.join(pickle_dir,'%s-kde.pickle' % self.objtype)
+        self.kde= self.get_kde()
+
+    def get_kde(self):
+        fout=open(self.kdefn,'r')
+        kde= pickle.load(fout)
+        fout.close()
+        return kde
+
+    def get_sample(self,ndraws=1,random_state=np.random.RandomState()):
+        samp= self.kde.sample(n_samples=ndraws,random_state=random_state)
+        if self.objtype == 'star':
+            #labels=['r wdust','r-z','g-r']
+            r= samp[:,0]
+            z= r- samp[:,1]
+            g= r+ samp[:,2]
+            return g,r,z
+        elif self.objtype == 'qso':
+            #labels=['r wdust','r-z','g-r']
+            r= samp[:,0]
+            z= r- samp[:,1]
+            g= r+ samp[:,2]
+            redshift= samp[:,3]
+            return g,r,z,redshift
+        elif self.objtype == 'elg':
+            #labels=['r wdust','r-z','g-r'] 
+            r= samp[:,0]
+            z= r- samp[:,1]
+            g= r+ samp[:,2]
+            redshift= samp[:,3]
+            rhalf= samp[:,4]
+            return g,r,z,redshift,rhalf
+        elif self.objtype == 'lrg':
+            #labels=['z wdust','r-z','r-W1','g wdust']
+            z= samp[:,0]
+            r= z+ samp[:,1]
+            w1= r - samp[:,2]
+            redshift= samp[:,3]
+            g= samp[:,4]
+            rhalf= samp[:,5]
+            return g,r,z,w1,redshift,rhalf
+        else: 
+            raise ValueError('objecttype= %s, not supported' % self.objtype)
+
+
+
 class KDEColors(object):
     def __init__(self,objtype='star',pickle_dir='./'):
         self.objtype= objtype
@@ -198,7 +247,7 @@ class KDEshapes(object):
     def __init__(self,objtype='elg',pickle_dir='./'):
         assert(objtype in ['lrg','elg'])
         self.objtype= objtype
-        self.kdefn=os.path.join(pickle_dir,'%s-shapes-kde.pickle' % self.objtype)
+        self.kdefn=os.path.join(pickle_dir,'%s-kde.pickle' % self.objtype)
         self.kde= self.get_kde()
 
     def get_kde(self):
@@ -238,7 +287,7 @@ def get_bybrick_dir(outdir='.'):
     return os.path.join(dr,'bybrick')
 
 def get_sample_fn(seed=None,prefix=''):
-    return '%ssample_%d.fits' % (prefix,seed)
+    return '%srank_%d_seed_%d.fits' % (prefix,seed,seed)
 
 def get_sample_fns(outdir=None,prefix=''):
     dr= get_sample_dir(outdir=outdir)
@@ -289,25 +338,40 @@ def draw_points(radec,unique_ids,seed=1,outdir='./',prefix=''):
     '''unique_ids -- ids assigned to this mpi task
     writes ra,dec,grz qso,lrg,elg,star to fits file
     for given seed'''
+    print('entered draw_points')
     ndraws= len(unique_ids)
     random_state= np.random.RandomState(seed)
     ra,dec= get_radec(radec,ndraws=ndraws,random_state=random_state)
-    # Mags
+    # Joint Sample
     mags={}
-    for typ in ['star','lrg','elg','qso']:
-        kde_obj= KDEColors(objtype=typ,pickle_dir=outdir)
+    print('KdeSample')
+    for typ in ['lrg','elg']: #,'stars','qso']:
+        #kde_obj= KDEColors(objtype=typ,pickle_dir=outdir)
+        kde_obj= KdeSample(objtype=typ,pickle_dir=outdir)
         if typ == 'star':
             mags['%s_g'%typ],mags['%s_r'%typ],mags['%s_z'%typ]= \
                         kde_obj.get_colors(ndraws=ndraws,random_state=random_state)
+        elif typ == 'elg':
+            mags['%s_g'%typ],mags['%s_r'%typ],mags['%s_z'%typ],\
+            mags['%s_redshift'%typ], mags['%s_rhalf'%typ]= \
+                        kde_obj.get_sample(ndraws=ndraws,random_state=random_state)
+        elif typ == 'lrg':
+            mags['%s_g'%typ],mags['%s_r'%typ],mags['%s_z'%typ],mags['%s_w1'%typ],\
+            mags['%s_redshift'%typ], mags['%s_rhalf'%typ]= \
+                        kde_obj.get_sample(ndraws=ndraws,random_state=random_state)
         else:
             mags['%s_g'%typ],mags['%s_r'%typ],mags['%s_z'%typ],mags['%s_redshift'%typ]= \
                         kde_obj.get_colors(ndraws=ndraws,random_state=random_state)
+    # Add n,ba,pa to sample
+    mags['%s_n'%typ] = np.ones(ndraws)
+    mags['%s_ba'%typ] = np.random.uniform(0.2,1.,size=ndraws)
+    mags['%s_pa'%typ] = np.random.uniform(0.,180.,size=ndraws)
     # Shapes
-    gfit={}
-    for typ in ['lrg','elg']:
-        kde_obj= KDEshapes(objtype=typ,pickle_dir=outdir)
-        gfit['%s_re'%typ],gfit['%s_n'%typ],gfit['%s_ba'%typ],gfit['%s_pa'%typ]= \
-                    kde_obj.get_shapes(ndraws=ndraws,random_state=random_state)
+    #gfit={}
+    #for typ in ['lrg','elg']:
+    #    kde_obj= KDEshapes(objtype=typ,pickle_dir=outdir)
+    #    gfit['%s_re'%typ],gfit['%s_n'%typ],gfit['%s_ba'%typ],gfit['%s_pa'%typ]= \
+    #                kde_obj.get_shapes(ndraws=ndraws,random_state=random_state)
     # Create Sample table
     T=fits_table()
     T.set('id',unique_ids)
@@ -316,8 +380,8 @@ def draw_points(radec,unique_ids,seed=1,outdir='./',prefix=''):
     T.set('dec',dec)
     for key in mags.keys():
         T.set(key,mags[key])
-    for key in gfit.keys():
-        T.set(key,gfit[key])
+    #for key in gfit.keys():
+    #    T.set(key,gfit[key])
     # Save table
     fn= os.path.join(get_sample_dir(outdir),get_sample_fn(seed,prefix=prefix) )
     if os.path.exists(fn):
@@ -643,11 +707,7 @@ def combine(fns):
             print('Fits file does not exist: %s' % fn)
     return cat
 
-
-if __name__ == "__main__":
-    t0 = Time()
-    tbegin=t0
-    print('TIMING:after-imports ',datetime.datetime.now())
+def get_parser():
     parser = argparse.ArgumentParser(description='Generate a legacypipe-compatible CCDs file from a set of reduced imaging.')
     parser.add_argument('--dowhat',choices=['sample','bybrick','merge','cleanup','check'],action='store',help='slurm jobid',default='001',required=True)
     parser.add_argument('--ra1',type=float,action='store',help='bigbox',required=True)
@@ -660,8 +720,17 @@ if __name__ == "__main__":
     parser.add_argument('--prefix', type=str, default='', help='Prefix to prepend to the output files.')
     parser.add_argument('--outdir', type=str, default='./radec_points_dir', help='Output directory.')
     parser.add_argument('--nproc', type=int, default=1, help='Number of CPUs to use.')
-    args = parser.parse_args()
+    return parser 
 
+if __name__ == "__main__":
+    t0 = Time()
+    tbegin=t0
+    print('TIMING:after-imports ',datetime.datetime.now())
+
+    parser= get_parser()
+    args = parser.parse_args()
+    print('TIMING:after argparse',datetime.datetime.now())
+    
     radec={}
     radec['ra1']=args.ra1
     radec['ra2']=args.ra2
