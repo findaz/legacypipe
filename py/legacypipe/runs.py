@@ -17,6 +17,21 @@ class Dr3DecalsSurvey(LegacySurveyData):
     def filter_ccd_kd_files(self, fns):
         return []
 
+class Dr5(LegacySurveyData):
+    def filter_ccds_files(self, fns):
+        return [fn for fn in fns if
+                ('survey-ccds-decals.fits.gz' in fn or
+                 'survey-ccds-nondecals.fits.gz' in fn or
+                 'survey-ccds-extra.fits.gz' in fn)]
+
+    def ccds_for_fitting(self, brick, ccds):
+        return np.flatnonzero(ccds.camera == 'decam')
+
+    def filter_ccd_kd_files(self, fns):
+        return []
+
+
+
 class Dr4Survey(LegacySurveyData):
     def ccds_for_fitting(survey, brick, ccds):
         return np.flatnonzero(np.logical_or(ccds.camera == 'mosaic',
@@ -88,6 +103,7 @@ class Dr4Plus(Dr4Survey):
 
 runs = {
     'dr3': Dr3DecalsSurvey,
+    'dr5': Dr5,
     'thirdpix-v2': Thirdpixv2,
     'thirdpix-v3': Thirdpixv3,
     'dr4v2': Dr4v2,
