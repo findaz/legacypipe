@@ -367,7 +367,7 @@ class LegacySurveyImage(object):
         '''
         Returns x0,x1,y0,y1,slc
         '''
-        slc = None
+        #slc = None
         imh,imw = self.get_image_shape()
         x0,y0 = 0,0
         x1 = x0 + imw

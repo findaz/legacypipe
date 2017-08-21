@@ -75,7 +75,7 @@ def main():
         im = survey.get_image_object(ccd)
         print('Got', im)
         slc = (slice(ccd.ccd_y0, ccd.ccd_y1), slice(ccd.ccd_x0, ccd.ccd_x1))
-        tim = im.get_tractor_image(slc, pixPsf=True, splinesky=True,
+        tim = im.get_tractor_image(slc=slc, pixPsf=True, splinesky=True,
                                    subsky=False, nanomaggies=False)
         print('Tim:', tim.shape)
 

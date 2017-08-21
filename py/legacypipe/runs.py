@@ -3,6 +3,15 @@ import numpy as np
 
 from legacypipe.survey import LegacySurveyData
 
+class Dr5(LegacySurveyData):
+    def ccds_for_fitting(self, brick, ccds):
+        return np.flatnonzero(ccds.camera == 'decam')
+
+    def filter_ccd_kd_files(self, fns):
+        return []
+
+
+
 class Dr3DecalsSurvey(LegacySurveyData):
     # Do we want/need this cut?
     # def filter_ccds_files(self, fns):
@@ -87,6 +96,7 @@ class Dr4Plus(Dr4Survey):
                   'survey-ccds-mzls-runs-16-to-21a.fits.gz' in fn)]
 
 runs = {
+    'dr5': Dr5,
     'dr3': Dr3DecalsSurvey,
     'thirdpix-v2': Thirdpixv2,
     'thirdpix-v3': Thirdpixv3,
