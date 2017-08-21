@@ -439,6 +439,10 @@ def create_legacypipe_table(ccds_fn):
                        'cd1_1','cd2_2','cd1_2','cd2_1',
                        'crval1','crval2','crpix1','crpix2']
     dustins_keys= ['skyrms']
+    obiwan_keys= ['gain']
+    all_keys= need_arjuns_keys +\
+              dustins_keys +\
+              obiwan_keys
     # Load full zpt table
     assert('-zpt.fits' in ccds_fn)
     T = fits_table(ccds_fn)
@@ -461,7 +465,7 @@ def create_legacypipe_table(ccds_fn):
         T.rename(old,new)
         #units[new]= units.pop(old)
     # Delete 
-    del_keys= list( set(T.get_columns()).difference(set(need_arjuns_keys+dustins_keys)) )
+    del_keys= list( set(T.get_columns()).difference(set(all_keys)) )
     for key in del_keys:
         T.delete_column(key)
         #if key in units.keys():
