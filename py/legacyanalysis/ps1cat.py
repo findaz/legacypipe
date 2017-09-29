@@ -116,7 +116,7 @@ class ps1cat(HealpixedCatalog):
 
         return cat
 
-    def get_stars(self,magrange=None,band='r'):
+    def get_stars(self,magrange=None,band='r',gaia_ps1=True):
         """Return the set of PS1 stars on a given CCD with well-measured grz
         magnitudes. Optionally trim the stars to a desired r-band magnitude
         range.
@@ -135,7 +135,7 @@ class ps1cat(HealpixedCatalog):
         xx,yy = np.meshgrid(np.linspace(1, W, W/100.),
                             np.linspace(1, H, H/100.))
         ra,dec = self.ccdwcs.pixelxy2radec(xx.ravel(), yy.ravel())
-        allcat = self.get_cat(ra, dec)
+        allcat = self.get_cat(ra, dec, gaia_ps1=gaia_ps1)
 
         #allcat = self.get_cat([bounds[0],bounds[1]],[bounds[2],bounds[3]])
         ok,xx,yy = self.ccdwcs.radec2pixelxy(allcat.ra, allcat.dec)
