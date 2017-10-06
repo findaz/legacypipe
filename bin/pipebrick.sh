@@ -46,7 +46,7 @@ echo "--------------------------------------------------------------------------
 python legacypipe/runbrick.py \
     --threads 8 \
     --skip \
-    --max-blobsize 1000000 \
+    --max-blobsize  250000 \
     --checkpoint $outdir/checkpoints/${bri}/checkpoint-${brick}.pickle \
     --pickle "$outdir/pickles/${bri}/runbrick-%(brick)s-%%(stage)s.pickle" \
     --write-stage srcs \
