@@ -163,7 +163,7 @@ if __name__ == '__main__':
     outfn = 'dr5-depth-concat.fits'
     summaryfn = 'dr5-depth-summary.fits'
     allfn = 'dr5-depth.fits'
-    basedir = '/project/projectdirs/cosmo/work/legacysurvey/dr5/DR5_out'
+    basedir = '/global/project/projectdirs/cosmo/data/legacysurvey/dr5'
     summarize_depths(basedir, outfn, summaryfn, allfn)
 
     ps = PlotSequence('depth')

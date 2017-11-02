@@ -17,6 +17,17 @@ class Dr3DecalsSurvey(LegacySurveyData):
     def filter_ccd_kd_files(self, fns):
         return []
 
+class Dr6DeepMzLS(LegacySurveyData):
+    #def filter_ccds_files(self, fns):
+    #    return [fn for fn in fns if
+    #            ('legacypipe_mosaic_0895p590.fits' in fn)]
+
+    def ccds_for_fitting(self, brick, ccds):
+        return np.flatnonzero(np.logical_or(ccds.camera == 'mosaic', ccds.camera == '90prime'))
+
+    def filter_ccd_kd_files(self, fns):
+        return []
+
 class Dr4Survey(LegacySurveyData):
     def ccds_for_fitting(survey, brick, ccds):
         return np.flatnonzero(np.logical_or(ccds.camera == 'mosaic',
@@ -99,6 +110,7 @@ runs = {
     'bootes-90prime': Dr4Bootes90Prime,
     'bootes-mzlsv2thruMarch19': Dr4BootesMzls,
     'dr4+': Dr4Plus,
+    'dr6deep':Dr6DeepMzLS,
     None: LegacySurveyData,
 }
 
