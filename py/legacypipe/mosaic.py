@@ -18,8 +18,6 @@ class MosaicImage(CPImage, CalibMixin):
     NOAO Community Pipeline.
     '''
 
-    mjd_third_pixel_fixed = 57674.
-
     # this is defined here for testing purposes (to handle small images)
     splinesky_boxsize = 512
 
@@ -27,14 +25,6 @@ class MosaicImage(CPImage, CalibMixin):
         super(MosaicImage, self).__init__(survey, t)
         # convert FWHM into pixel units
         #self.fwhm /= self.pixscale
-
-    @classmethod
-    def get_bad_expids(self):
-        import legacyccds
-        fn = os.path.join(os.path.dirname(legacyccds.__file__),
-                          'bad_expid_mzls.txt')
-        bad_expids = np.loadtxt(fn, dtype=int, usecols=(0,))
-        return bad_expids
 
     @classmethod
     def nominal_zeropoints(self):
@@ -59,7 +49,7 @@ class MosaicImage(CPImage, CalibMixin):
         for name,crit in [
             ('exptime < 30 s', (ccds.exptime < 30)),
             ('ccdnmatch < 20', (ccds.ccdnmatch < 20)),
-            ('sky too bright: ccdskycounts >= 150', (ccds.ccdskycounts >= 150)),
+            #('sky too bright: ccdskycounts >= 150', (ccds.ccdskycounts >= 150)),
             ('abs(zpt - ccdzpt) > 0.1',
              (np.abs(ccds.zpt - ccds.ccdzpt) > 0.1)),
             ('zpt < 0.6 mag of nominal',
@@ -77,37 +67,6 @@ class MosaicImage(CPImage, CalibMixin):
             n0 = n
         return np.flatnonzero(good)
 
-    @classmethod
-    def ccd_cuts(self, survey, ccds):
-        ccdcuts = super(MosaicImage, self).ccd_cuts(survey, ccds)
-        bits = LegacySurveyData.ccd_cut_bits
-        I = self.bad_third_pixel(survey, ccds)
-        print(np.sum(I), 'CCDs have bad THIRD_PIXEL')
-        ccdcuts[I] += bits['THIRD_PIXEL']
-        return ccdcuts
-    
-    @classmethod
-    def bad_third_pixel(self, survey, ccds):
-        '''
-        For mosaic this is inconsistent YSHIFT header 
-        Ensures that ccds are 1/3 pixel interpolated.
-        '''
-        from astropy.io import fits
-        bad = np.zeros(len(ccds), bool)
-        # Remove if primary header does NOT have keyword YSHIFT
-        rootdir = survey.get_image_dir()
-        # The 1/3-pixel shift problem was fixed in hardware on MJD 57674,
-        # so only check for problems in data before then.
-        I = np.flatnonzero(ccds.mjd_obs < MosaicImage.mjd_third_pixel_fixed)
-        for i in I:
-            fn = ccds.image_filename[i]
-            fn = fn.strip()
-            fn = os.path.join(rootdir, fn)
-            hdulist = fits.open(fn)
-            if not 'YSHIFT' in hdulist[0].header:
-                print('Did not find YSHIFT in primary header of', fn)
-                bad[i] = True
-        return bad
 
     def read_dq(self, **kwargs):
         '''

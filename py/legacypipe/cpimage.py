@@ -168,25 +168,7 @@ class CPImage(LegacySurveyImage):
 
         return wt
 
-    @classmethod
-    def ccd_cuts(self, survey, ccds):
-        ccdcuts = super(CPImage, self).ccd_cuts(survey, ccds)
-        bits = LegacySurveyData.ccd_cut_bits
-
-        I = self.bad_exposures(survey, ccds)
-        print(np.sum(I), 'CCDs have BAD_EXPID')
-        ccdcuts[I] += bits['BAD_EXPID']
-
-        I = self.ccdname_hdu_mismatch(survey, ccds)
-        print(np.sum(I), 'CCDs have CCDNAME_HDU mismatch')
-        ccdcuts[I] += bits['CCDNAME_HDU_MISMATCH']
-
-        I = self.bad_astrometry(survey, ccds)
-        print(np.sum(I), 'CCDs have bad astrometry')
-        ccdcuts[I] += bits['BAD_ASTROMETRY']
-        
-        return ccdcuts
-    
+   
     @classmethod
     def bad_exposures(self, survey, ccds):
         '''

@@ -69,14 +69,6 @@ class BokImage(CPImage, CalibMixin):
             n0 = n
         return np.flatnonzero(good)
 
-    @classmethod
-    def get_bad_expids(self):
-        import legacyccds
-        fn = os.path.join(os.path.dirname(legacyccds.__file__),
-                          'bad_expid_bok.txt')
-        bad_expids = np.loadtxt(fn, dtype=int, usecols=(0,))
-        return bad_expids
-
     def read_dq(self, **kwargs):
         '''
         Reads the Data Quality (DQ) mask image.
