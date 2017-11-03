@@ -896,6 +896,7 @@ class CalibMixin(object):
     def run_psfex(self, surveyname):
         from astrometry.util.file import trymakedirs
         from legacypipe.survey import get_git_version
+        import legacypipe
         sedir = self.survey.get_se_dir()
         trymakedirs(self.psffn, dir=True)
         primhdr = self.read_image_primary_header()

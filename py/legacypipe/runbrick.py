@@ -123,6 +123,7 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
     '''
     from legacypipe.survey import (
         get_git_version, get_version_header, wcs_for_brick, read_one_tim)
+    import legacypipe
     t0 = tlast = Time()
     assert(survey is not None)
 
@@ -163,6 +164,7 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
 
     # Create FITS header with version strings
     gitver = get_git_version()
+
     print('Got git version:', Time()-t0)
 
     version_header = get_version_header(program_name, survey.survey_dir,

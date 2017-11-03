@@ -139,15 +139,19 @@ def get_git_version(dir=None):
     Git version string
     '''
     from astrometry.util.run_command import run_command
-    cmd = ''
-    if dir is not None:
-        cmd = "cd '%s' && " % dir
-    cmd += 'git describe'
+    if dir is None:
+        import legacypipe
+        dir = os.path.dirname(legacypipe.__file__)
+
+    cmd = "cd '%s' && git describe" % dir
     rtn,version,err = run_command(cmd)
     if rtn:
         raise RuntimeError('Failed to get version string (%s): ' % cmd +
                            version + err)
     version = version.strip()
+    if len(version) == 0:
+        print('WARNING: failed to get git version string for directory %s' % dir)
+        version = 'None'
     return version
 
 def get_version_header(program_name, survey_dir, git_version=None):
