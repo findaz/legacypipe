@@ -10,7 +10,8 @@ def make_coadds(tims, bands, targetwcs,
                 ngood=False, detmaps=False, psfsize=False,
                 callback=None, callback_args=[],
                 plots=False, ps=None,
-                lanczos=True, mp=None):
+                lanczos=True, mp=None,
+                model_only=False):
     from astrometry.util.ttime import Time
     t0 = Time()
 
@@ -290,6 +291,7 @@ def make_coadds(tims, bands, targetwcs,
                 if mods is not None:
                     apargs.append((irad, band, rad, coresid, None, False, apxy))
 
+        kwargs.update(model_only=model_only)
         if callback is not None:
             callback(band, *callback_args, **kwargs)
         # END of loop over bands
@@ -420,7 +422,8 @@ def _apphot_one(args):
 def write_coadd_images(band,
                        survey, brickname, version_header, tims, targetwcs,
                        cowimg=None, cow=None, cowmod=None, cochi2=None,
-                       psfdetiv=None, galdetiv=None, congood=None, **kwargs):
+                       psfdetiv=None, galdetiv=None, congood=None, 
+                       model_only=False, **kwargs):
 
     # copy version_header before modifying...
     hdr = fitsio.FITSHDR()
@@ -494,6 +497,9 @@ def write_coadd_images(band,
         from legacypipe.survey import MyFITSHDR
         if img is None:
             print('Image type', prodtype, 'is None -- skipping')
+            continue
+        if (model_only) & (name != 'model'):
+            print('Only model coadd')
             continue
         # Make a copy, because each image has different values for
         # these headers...

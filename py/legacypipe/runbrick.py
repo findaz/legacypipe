@@ -1986,6 +1986,25 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
     del xx,yy,ok,ra,dec
 
     record_event and record_event('stage_coadds: coadds')
+
+    # Coadd of simulated galaxies
+    if hasattr(tims[0], 'sims_image'):
+        sims_mods = [tim.sims_image for tim in tims]
+        T_sims_coadds = make_coadds(tims, bands, targetwcs, mods=sims_mods,
+                                    lanczos=lanczos, mp=mp,
+                                    callback=write_coadd_images,
+                                    callback_args=(survey, brickname, version_header, tims,
+                                                   targetwcs),
+                                    model_only=True
+                                    )
+        sims_coadd = T_sims_coadds.comods
+        del T_sims_coadds
+        for band in bands:
+            sim_coadd_fn= survey.find_file('model',brick=brickname, band=band,
+                                            output=True)
+            os.rename(sim_coadd_fn,sim_coadd_fn.replace('-model-','-sims-'))
+        
+
     C = make_coadds(tims, bands, targetwcs, mods=mods, xy=ixy,
                     ngood=True, detmaps=True, psfsize=True, lanczos=lanczos,
                     apertures=apertures, apxy=apxy,
@@ -1994,20 +2013,6 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
                                    targetwcs),
                     plots=False, ps=ps, mp=mp)
     record_event and record_event('stage_coadds: extras')
-    
-    # Coadds of galaxy sims only, image only
-    if hasattr(tims[0], 'sims_image'):
-        sims_mods = [tim.sims_image for tim in tims]
-        T_sims_coadds = make_coadds(tims, bands, targetwcs, mods=sims_mods,
-                                    lanczos=lanczos, mp=mp)
-        sims_coadd = T_sims_coadds.comods
-        del T_sims_coadds
-        image_only_mods= [tim.data-tim.sims_image for tim in tims]
-        T_image_coadds = make_coadds(tims, bands, targetwcs,
-                                     mods=image_only_mods,
-                                     lanczos=lanczos, mp=mp)
-        image_coadd= T_image_coadds.comods
-        del T_image_coadds
     ###
 
     for c in ['nobs', 'anymask', 'allmask', 'psfsize', 'psfdepth', 'galdepth',
