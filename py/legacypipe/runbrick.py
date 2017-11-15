@@ -2018,9 +2018,6 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
     for c in ['nobs', 'anymask', 'allmask', 'psfsize', 'psfdepth', 'galdepth',
               'mjd_min', 'mjd_max']:
         T.set(c, C.T.get(c))
-    # store galaxy sim bounding box in Tractor cat
-    if 'sims_xy' in C.T.get_columns():
-        T.set('sims_xy', C.T.get('sims_xy'))
 
     # Compute depth histogram
     D = _depth_histogram(brick, targetwcs, bands, C.psfdetivs, C.galdetivs)
@@ -2492,13 +2489,6 @@ def stage_writecat(
     with survey.write_output('tractor', brick=brickname) as out:
         format_catalog(T2, hdr, primhdr, allbands, None,
                        write_kwargs=dict(fits_object=out.fits))
-
-    # write fits file with galaxy-sim stuff (xy bounds of each sim)
-    if 'sims_xy' in T.get_columns(): 
-        sims_data = fits_table()
-        sims_data.sims_xy = T.sims_xy
-        with survey.write_output('galaxy-sims', brick=brickname) as out:
-            sims_data.writeto(None, fits_object=out.fits)
 
     # produce per-brick checksum file.
     with survey.write_output('checksums', brick=brickname, hashsum=False) as out:
