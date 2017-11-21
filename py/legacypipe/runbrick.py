@@ -957,7 +957,24 @@ def stage_image_coadds(survey=None, targetwcs=None, bands=None, tims=None,
         ccds.writeto(None, fits_object=out.fits, primheader=version_header)
 
     record_event and record_event('stage_mask_junk: starting')
-            
+    
+    # Coadd of simulated galaxies
+    if hasattr(tims[0], 'sims_image'):
+        sims_mods = [tim.sims_image for tim in tims]
+        T_sims_coadds = make_coadds(tims, bands, targetwcs, mods=sims_mods,
+                                    lanczos=lanczos, mp=mp,
+                                    callback=write_coadd_images,
+                                    callback_args=(survey, brickname, version_header, tims,
+                                                   targetwcs),
+                                    model_only=True
+                                    )
+        sims_coadd = T_sims_coadds.comods
+        del T_sims_coadds
+        for band in bands:
+            sim_coadd_fn= survey.find_file('model',brick=brickname, band=band,
+                                            output=True)
+            os.rename(sim_coadd_fn,sim_coadd_fn.replace('-model-','-sims-'))
+
     C = make_coadds(tims, bands, targetwcs,
                     detmaps=True, ngood=True, lanczos=lanczos,
                     callback=write_coadd_images,
@@ -966,12 +983,12 @@ def stage_image_coadds(survey=None, targetwcs=None, bands=None, tims=None,
                     mp=mp)
 
     # Sims: coadds of galaxy sims only, image only
-    if hasattr(tims[0], 'sims_image'):
-        sims_coadd, nil = quick_coadds(
-            tims, bands, targetwcs, images=[tim.sims_image for tim in tims])
-        image_coadd,nil = quick_coadds(
-            tims, bands, targetwcs, images=[tim.data - tim.sims_image
-                                            for tim in tims])
+    # if hasattr(tims[0], 'sims_image'):
+    #     sims_coadd, nil = quick_coadds(
+    #         tims, bands, targetwcs, images=[tim.sims_image for tim in tims])
+    #     image_coadd,nil = quick_coadds(
+    #         tims, bands, targetwcs, images=[tim.data - tim.sims_image
+    #                                         for tim in tims])
 
     D = _depth_histogram(brick, targetwcs, bands, C.psfdetivs, C.galdetivs)
     with survey.write_output('depth-table', brick=brickname) as out:
