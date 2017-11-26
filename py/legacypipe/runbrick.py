@@ -974,6 +974,22 @@ def stage_image_coadds(survey=None, targetwcs=None, bands=None, tims=None,
             sim_coadd_fn= survey.find_file('model',brick=brickname, band=band,
                                             output=True)
             os.rename(sim_coadd_fn,sim_coadd_fn.replace('-model-','-sims-'))
+    # IDs of simulated galaxies touching ccds
+    if hasattr(tims[0], 'ids_added'):
+        ids_added= set()
+        for tim in tims:
+            print(tim.ids_added)
+            ids_added= ids_added.union(set(tim.ids_added))
+        a=fits_table()
+        a.set('id',np.array(list(ids_added)))
+        #a.writeto(sim_coadd_fn)
+        # legacysurvey-1741p242-image.jpg
+        a_fn= survey.find_file('image-jpeg',brick=brickname,output=True)
+        a_fn= a_fn.replace('legacysurvey-%s-image.jpg' % brickname,
+                           'sim_ids_added.fits')
+        a.writeto(a_fn)
+        print('Wrote %s' % a_fn)
+
 
     C = make_coadds(tims, bands, targetwcs,
                     detmaps=True, ngood=True, lanczos=lanczos,
@@ -2020,6 +2036,21 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
             sim_coadd_fn= survey.find_file('model',brick=brickname, band=band,
                                             output=True)
             os.rename(sim_coadd_fn,sim_coadd_fn.replace('-model-','-sims-'))
+    # IDs of simulated galaxies touching ccds
+    if hasattr(tims[0], 'ids_added'):
+        ids_added= set()
+        for tim in tims:
+            print(tim.ids_added)
+            ids_added= ids_added.union(set(tim.ids_added))
+        a=fits_table()
+        a.set('id',np.array(list(ids_added)))
+        #a.writeto(sim_coadd_fn)
+        # legacysurvey-1741p242-image.jpg
+        a_fn= survey.find_file('image-jpeg',brick=brickname,output=True)
+        a_fn= a_fn.replace('legacysurvey-%s-image.jpg' % brickname,
+                           'sim_ids_added.fits')
+        a.writeto(a_fn)
+        print('Wrote %s' % a_fn)
         
 
     C = make_coadds(tims, bands, targetwcs, mods=mods, xy=ixy,
