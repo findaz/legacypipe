@@ -121,6 +121,8 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
     - *splinesky*: boolean.  Use SplineSky model, rather than ConstantSky?
 
     '''
+    print("kwargs['skip_ccd_cuts']=",kwargs['skip_ccd_cuts'])
+    raise ValueError
     from legacypipe.survey import (
         get_git_version, get_version_header, wcs_for_brick, read_one_tim)
     t0 = tlast = Time()
@@ -2589,6 +2591,8 @@ def run_brick(brick, survey, radec=None, pixscale=0.262,
               checkpoint_period=None,
               prereqs_update=None,
               stagefunc = None,
+              # obiwan
+              skip_ccd_cuts=False,
               ):
     '''
     Run the full Legacy Survey data reduction pipeline.
@@ -2894,6 +2898,9 @@ def run_brick(brick, survey, radec=None, pixscale=0.262,
         mp.finish_subphase()
         return R
     
+    # obiwan
+    kwargs.update(skip_ccd_cuts=skip_ccd_cuts)
+
     for stage in stages:
         runstage(stage, pickle_pat, mystagefunc, prereqs=prereqs,
                  initial_args=initargs, **kwargs)
