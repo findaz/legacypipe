@@ -121,8 +121,6 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
     - *splinesky*: boolean.  Use SplineSky model, rather than ConstantSky?
 
     '''
-    print("kwargs['skip_ccd_cuts']=",kwargs['skip_ccd_cuts'])
-    raise ValueError
     from legacypipe.survey import (
         get_git_version, get_version_header, wcs_for_brick, read_one_tim)
     t0 = tlast = Time()
@@ -260,42 +258,44 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
 
     print('Got CCDs:', Time()-t0)
 
-    # Sort images by band -- this also eliminates images whose
-    # *filter* string is not in *bands*.
-    print('Unique filters:', np.unique(ccds.filter))
-    ccds.cut(np.in1d(ccds.filter, bands))
-    print('Cut on filter:', len(ccds), 'CCDs remain.')
+    if kwargs['skip_ccd_cuts'] == False:
+        # Sort images by band -- this also eliminates images whose
+        # *filter* string is not in *bands*.
+        print('Unique filters:', np.unique(ccds.filter))
+        ccds.cut(np.in1d(ccds.filter, bands))
+        print('Cut on filter:', len(ccds), 'CCDs remain.')
 
-    print('Cutting out non-photometric CCDs...')
-    I = survey.photometric_ccds(ccds)
-    if I is None:
-        print('None cut')
-    else:
-        print(len(I), 'of', len(ccds), 'CCDs are photometric')
-        ccds.cut(I)
+        print('Cutting out non-photometric CCDs...')
+        I = survey.photometric_ccds(ccds)
+        if I is None:
+            print('None cut')
+        else:
+            print(len(I), 'of', len(ccds), 'CCDs are photometric')
+            ccds.cut(I)
 
-    print('Applying CCD cuts...')
-    ccds.ccd_cuts = survey.ccd_cuts(ccds)
-    cutvals = ccds.ccd_cuts
-    print('CCD cut bitmask values:', cutvals)
-    ccds.cut(cutvals == 0)
-    print(len(ccds), 'CCDs survive cuts')
+        print('Applying CCD cuts...')
+        ccds.ccd_cuts = survey.ccd_cuts(ccds)
+        cutvals = ccds.ccd_cuts
+        print('CCD cut bitmask values:', cutvals)
+        ccds.cut(cutvals == 0)
+        print(len(ccds), 'CCDs survive cuts')
 
-    print('Cutting on CCDs to be used for fitting...')
-    I = survey.ccds_for_fitting(brick, ccds)
-    if I is not None:
-        print('Cutting to', len(I), 'of', len(ccds), 'CCDs for fitting.')
-        ccds.cut(I)
+        print('Cutting on CCDs to be used for fitting...')
+        I = survey.ccds_for_fitting(brick, ccds)
+        if I is not None:
+            print('Cutting to', len(I), 'of', len(ccds), 'CCDs for fitting.')
+            ccds.cut(I)
 
-    if depth_cut:
-        # If we have many images, greedily select images until we have
-        # reached our target depth
-        print('Cutting to CCDs required to hit our depth targets')
-        keep_ccds = make_depth_cut(survey, ccds, bands, targetrd, brick, W, H, pixscale,
-                                   plots, ps, splinesky, gaussPsf, pixPsf,
-                                   do_calibs, gitver, targetwcs)
-        ccds.cut(np.array(keep_ccds))
-        print('Cut to', len(ccds), 'CCDs required to reach depth targets')
+        if depth_cut:
+            # If we have many images, greedily select images until we have
+            # reached our target depth
+            print('Cutting to CCDs required to hit our depth targets')
+            keep_ccds = make_depth_cut(survey, ccds, bands, targetrd, brick, W, H, pixscale,
+                                       plots, ps, splinesky, gaussPsf, pixPsf,
+                                       do_calibs, gitver, targetwcs)
+            ccds.cut(np.array(keep_ccds))
+            print('Cut to', len(ccds), 'CCDs required to reach depth targets')
+    print('CCDs remaining: %d' % len(ccds))
 
     # Create Image objects for each CCD
     ims = []
@@ -3085,6 +3085,9 @@ python -u legacypipe/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 450 9
     parser.add_argument(
         '--allow-missing-brickq', type=int, choices=[0,1,2], default=-1,
         help='Do not fail if a prerequisite brick of given brickq is missing.')
+    #obiwan
+    parser.add_argument('--skip_ccd_cuts', action='store_true',default=False,
+                        help='no ccd cuts')
 
     return parser
 
