@@ -84,7 +84,7 @@ def sed_matched_filters(bands):
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
                             targetwcs, nsigma=5, saturated_pix=None,
-                            plots=False, ps=None, mp=None):
+                            plots=False, ps=None, rgb=None, mp=None):
     '''
     Runs a given set of SED-matched filters.
 
@@ -158,7 +158,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         t0 = Time()
         sedhot,px,py,peakval,apval = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy,
-            nsigma=nsigma, saturated_pix=saturated_pix, ps=pps)
+            nsigma=nsigma, saturated_pix=saturated_pix, ps=pps, rgb=rgb)
         print('SED took', Time()-t0)
         if sedhot is None:
             continue
@@ -204,7 +204,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                           saturated_pix=None,
                           saddle=2.,
                           cutonaper=True,
-                          ps=None):
+                          ps=None,
+                          rgb=None):
     '''
     Runs a single SED-matched detection filter.
 
@@ -301,7 +302,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     def saddle_level(Y):
         # Require a saddle that drops by (the larger of) "saddle"
         # sigma, or 20% of the peak height
-        drop = max(saddle, Y * 0.2)
+        #drop = max(saddle, Y * 0.2)
+        drop = max(saddle, Y * 0.1)
         return Y - drop
 
     lowest_saddle = nsigma - saddle
@@ -371,7 +373,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     # level, and drop the source if it is in the same blob as a
     # previously-detected source.  We dilate the blobs a bit too, to
     # catch slight differences in centroid vs SDSS sources.
-    dilate = 2
+    #dilate = 2
+    #dilate = 1
+    dilate = 0
 
     # For efficiency, segment at the minimum saddle level to compute
     # slices; the operations described above need only happen within
@@ -379,7 +383,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     saddlemap = (sedsn > lowest_saddle)
     if saturated_pix is not None:
         saddlemap |= saturated_pix
-    saddlemap = binary_dilation(saddlemap, iterations=dilate)
+    if dilate:
+        saddlemap = binary_dilation(saddlemap, iterations=dilate)
     allblobs,nblobs = label(saddlemap)
     allslices = find_objects(allblobs)
     ally0 = [sy.start for sy,sx in allslices]
@@ -417,13 +422,15 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     for i,(x,y) in enumerate(zip(px, py)):
         #print('Potential peak at', x,y)
         # These plots are turned off -- one plot per peak is a little excessive!
-        if False and ps is not None:
+        if (True and ps is not None
+            and (x,y) in [(90,102), (100,95)]):
             plt.clf()
             plt.subplot(2,2,1)
             plt.imshow(vetomap, interpolation='nearest', origin='lower',
                        cmap='gray', vmin=0, vmax=1)
             ax = plt.axis()
-            plt.plot(x, y, 'o', mec='r', mfc='r')
+            #plt.plot(x, y, 'o', mec='r', mfc='r')
+            plt.plot(x, y, 'o', mec='g', mfc='none')
             prevx = px[:i][keep[:i]]
             prevy = py[:i][keep[:i]]
             plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
@@ -440,18 +447,21 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             plt.imshow(saddlemap, interpolation='nearest', origin='lower',
                        vmin=0, vmax=1, cmap='gray')
             ax = plt.axis()
-            plt.plot(x, y, 'o', mec='r', mfc='r')
+            #plt.plot(x, y, 'o', mec='r', mfc='r')
+            plt.plot(x, y, 'o', mec='g', mfc='none')
             plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
             plt.title('saddle map (1)')
             
             plt.subplot(2,2,3)
             saddlemap = binary_fill_holes(saddlemap)
-            saddlemap = binary_dilation(saddlemap, iterations=dilate)
+            if dilate:
+                saddlemap = binary_dilation(saddlemap, iterations=dilate)
             plt.imshow(saddlemap, interpolation='nearest', origin='lower',
                        vmin=0, vmax=1, cmap='gray')
             ax = plt.axis()
-            plt.plot(x, y, 'o', mec='r', mfc='r')
+            #plt.plot(x, y, 'o', mec='r', mfc='r')
+            plt.plot(x, y, 'o', mec='g', mfc='none')
             plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
             plt.title('saddle map (2)')
@@ -464,8 +474,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             plt.imshow(saddlemap, interpolation='nearest', origin='lower',
                        vmin=0, vmax=1, cmap='gray')
             ax = plt.axis()
-            plt.plot(x, y, 'o', mec='r', mfc='r')
-            plt.plot(prevx, prevx, 'o', mec='r', mfc='none')
+            #plt.plot(x, y, 'o', mec='r', mfc='r')
+            plt.plot(x, y, 'o', mec='g', mfc='none')
+            plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
             plt.title('saddle map (3)')
 
@@ -494,7 +505,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         #print('  saddlemap', Time()-tlast)
         saddlemap = binary_fill_holes(saddlemap)
         #print('  fill holes', Time()-tlast)
-        saddlemap = binary_dilation(saddlemap, iterations=dilate)
+        if dilate:
+            saddlemap = binary_dilation(saddlemap, iterations=dilate)
         #print('  dilation', Time()-tlast)
         blobs,nblobs = label(saddlemap)
         #print('  label', Time()-tlast)
@@ -649,18 +661,30 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.title('SED %s: veto map' % sedname)
         ps.savefig()
 
-
         plt.clf()
-        dimshow(hotblobs, vmin=0, vmax=1, cmap='hot')
+        if rgb is not None:
+            dimshow(rgb)
+            plot_boundary_map(hotblobs)
+        else:
+            dimshow(hotblobs, vmin=0, vmax=1, cmap='hot')
         ax = plt.axis()
         p1 = plt.plot(px, py, 'g+', ms=8, mew=2)
         p2 = plt.plot(pxdrop, pydrop, 'm+', ms=8, mew=2)
+        for x,y in zip(pxdrop,pydrop):
+            plt.text(x,y,'%i,%i' % (x,y), fontsize=8,
+                     bbox=dict(facecolor='w', alpha=0.5))
         p3 = plt.plot(xomit, yomit, 'r+', ms=8, mew=2)
         plt.axis(ax)
         plt.title('SED %s: hot blobs' % sedname)
         plt.figlegend((p3[0],p1[0],p2[0]), ('Existing', 'Keep', 'Drop'),
                       'upper left')
         ps.savefig()
+
+        if False:
+            import fitsio
+            fn = 'sedsn-%s.fits' % sedname
+            fitsio.write(fn, sedsn, clobber=True)
+            print('Wrote', fn)
 
     return hotblobs, px, py, aper, peakval
 

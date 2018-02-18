@@ -1240,9 +1240,14 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
     record_event and record_event('stage_srcs: SED-matched')
     print('Running source detection at', nsigma, 'sigma')
     SEDs = survey.sed_matched_filters(bands)
+    kwa = {}
+    if plots:
+        coimgs,nil = quick_coadds(tims, bands, targetwcs)
+        kwa.update(rgb=get_rgb(coimgs, bands))
     Tnew,newcat,hot = run_sed_matched_filters(
         SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
-        nsigma=nsigma, saturated_pix=saturated_pix, plots=plots, ps=ps, mp=mp)
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=plots, ps=ps, mp=mp,
+        **kwa)
     if Tnew is None:
         raise NothingToDoError('No sources detected.')
     Tnew.delete_column('peaksn')
@@ -1268,22 +1273,29 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
 
     if plots:
         coimgs,cons = quick_coadds(tims, bands, targetwcs)
-        crossa = dict(ms=10, mew=1.5)
+        crossa = dict(ms=10, mew=1.5, zorder=20)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
         plt.title('Detections')
         ps.savefig()
         ax = plt.axis()
-        plt.plot(Tsat.ibx, Tsat.iby, '+', color='r',
-                 label='Tycho2 + saturated', **crossa)
+        plt.plot(Tsat.ibx, Tsat.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        lp,lt = [],[]
+        p = plt.plot(Tsat.ibx, Tsat.iby, '+', color='r', **crossa)
+        lp.append(p[0])
+        lt.append('Tycho2 + saturated')
         if len(Tgaia):
-            plt.plot(Tgaia.ibx, Tgaia.iby, '+', color=(0,1,1),
-                     label='Gaia', **crossa)
-        plt.plot(Tnew.ibx, Tnew.iby, '+', color=(0,1,0),
-                 label='New SED-matched detections', **crossa)
+            plt.plot(Tgaia.ibx, Tgaia.iby, '+', color='w', mew=3, ms=10, zorder=10)
+            p = plt.plot(Tgaia.ibx, Tgaia.iby, '+', color='b', **crossa)
+            lp.append(p[0])
+            lt.append('Gaia')
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='g', **crossa)
+        lp.append(p[0])
+        lt.append('New detections')
         plt.axis(ax)
         plt.title('Detections')
-        plt.legend(loc='upper left')
+        plt.legend(lp, lt, loc='upper left')
         ps.savefig()
 
     # Segment, and record which sources fall into each blob
@@ -1901,6 +1913,218 @@ def _get_mod(X):
     print('Getting model for', tim, ':', Time()-t0)
     return mod
 
+def stage_redetect(survey=None, bands=None, targetwcs=None,
+                   tims=None, ps=None, brickname=None, ccds=None,
+                   T=None, cat=None, pixscale=None, plots=False,
+                   brick=None, W=None, H=None, lanczos=True,
+                   nsigma=None,
+                   mp=None,
+                   record_event=None,
+                   **kwargs):
+    # Produce the residual images and re-run source detection...
+
+    mods = mp.map(_get_mod, [(tim, cat) for tim in tims])
+
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Images')
+        ps.savefig()
+
+        coimgs,cons = quick_coadds(tims, bands, targetwcs,
+                                   images=mods)
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Models')
+        ps.savefig()
+
+        coimgs,cons = quick_coadds(tims, bands, targetwcs,
+                                   images=[tim.data - mod
+                                           for tim,mod in zip(tims,mods)])
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Residuals')
+        ps.savefig()
+
+        coimgs,cons = quick_coadds(tims, bands, targetwcs,
+                                   images=[np.abs(tim.data - mod)
+                                           for tim,mod in zip(tims,mods)])
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Abs Residuals')
+        ps.savefig()
+
+    saved_images = [tim.data for tim in tims]
+
+    SEDs = survey.sed_matched_filters(bands)
+    
+    # (A) Residuals
+    for tim,mod in zip(tims, mods):
+        tim.data = tim.data - mod
+
+    from legacypipe.detection import (detection_maps, sed_matched_filters,
+                        run_sed_matched_filters, segment_and_group_sources)
+        
+    detmaps, detivs, satmap = detection_maps(tims, targetwcs, bands, mp)
+    avoid_x, avoid_y = [],[]
+    saturated_pix = (satmap > 0)
+    Tnew,newcat,hot = run_sed_matched_filters(
+        SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=False, ps=ps, mp=mp)
+
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Residuals: New Detections')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        #lp.append(p[0])
+        ps.savefig()
+
+
+
+    # (B) Clipped residuals
+    for tim,mod,img in zip(tims, mods, saved_images):
+        tim.data = np.maximum(0, img - mod)
+    detmaps, detivs, satmap = detection_maps(tims, targetwcs, bands, mp)
+    avoid_x, avoid_y = [],[]
+    saturated_pix = (satmap > 0)
+    Tnew,newcat,hot = run_sed_matched_filters(
+        SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=False, ps=ps, mp=mp)
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Clipped Residuals: New Detections')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        ps.savefig()
+
+    # (C) Negative residuals
+    for tim,mod,img in zip(tims, mods, saved_images):
+        tim.data = mod - img
+    detmaps, detivs, satmap = detection_maps(tims, targetwcs, bands, mp)
+    avoid_x, avoid_y = [],[]
+    saturated_pix = (satmap > 0)
+    Tnew,newcat,hot = run_sed_matched_filters(
+        SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=False, ps=ps, mp=mp)
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Negative Residuals: New Detections')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        ps.savefig()
+
+    # (C) Clipped negative residuals
+    for tim,mod,img in zip(tims, mods, saved_images):
+        tim.data = np.maximum(0, mod - img)
+    detmaps, detivs, satmap = detection_maps(tims, targetwcs, bands, mp)
+    avoid_x, avoid_y = [],[]
+    saturated_pix = (satmap > 0)
+    Tnew,newcat,hot = run_sed_matched_filters(
+        SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=False, ps=ps, mp=mp)
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        plt.title('Clipped Negative Residuals: New Detections')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        ps.savefig()
+
+    # (D) Abs residuals
+    for tim,mod,img in zip(tims, mods, saved_images):
+        tim.data = np.abs(img - mod)
+    detmaps, detivs, satmap = detection_maps(tims, targetwcs, bands, mp)
+    avoid_x, avoid_y = [],[]
+
+    # Median-smooth detection maps
+    binning = 4
+    smoos = mp.map(_median_smooth_detmap,
+                   [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
+    for i,(detmap,detiv,smoo) in enumerate(zip(detmaps, detivs, smoos)):
+        S = binning
+        for ii in range(S):
+            for jj in range(S):
+                sh,sw = detmap[ii::S, jj::S].shape
+                detmap[ii::S, jj::S] -= smoo[:sh,:sw]
+
+    if plots:
+        plt.clf()
+        for band,d,div in zip(bands, detmaps, detivs):
+            ccmap = dict(g='g', r='r', z='m')
+            lo,hi = -5,10
+            plt.hist(np.clip((d[div>0] * np.sqrt(div[div>0])).ravel(), lo,hi),
+                     range=(lo,hi), bins=60, histtype='step', color=ccmap[band])
+        plt.title('Abs resids: Detection map S/N')
+        ps.savefig()
+
+
+    saturated_pix = (satmap > 0)
+    Tnew,newcat,hot = run_sed_matched_filters(
+        SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=True, ps=ps, mp=mp)
+
+    #blobs,blobsrcs,blobslices = segment_and_group_sources(
+    #    hot, Tnew, name=brickname, ps=ps, plots=False)
+    if plots:
+        coimgs,cons = quick_coadds(tims, bands, targetwcs)
+        plt.clf()
+        rgb = get_rgb(coimgs, bands)
+        dimshow(rgb)
+        plt.title('Abs Residuals: New Detections')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        ps.savefig()
+
+        print('hot:', hot.dtype, hot.shape)
+        from collections import Counter
+        print(Counter(hot.ravel()).most_common())
+        
+        from scipy.ndimage.morphology import binary_dilation
+        #outline = (binary_dilation(blobs >= 0, structure=np.ones((3,3)))*1 - (blobs>=0)*1)
+        outline = np.logical_xor(binary_dilation(hot, structure=np.ones((3,3))), hot)
+        # Outline in green
+        rgb[:,:,0][outline] = 0
+        rgb[:,:,1][outline] = 1
+        rgb[:,:,2][outline] = 0
+        plt.clf()
+        dimshow(rgb)
+        plt.title('Abs Residuals: New Detections + Blobs')
+        ax = plt.axis()
+        plt.plot(Tnew.ibx, Tnew.iby, '+', color='w', mew=3, ms=10, zorder=10)
+        p = plt.plot(Tnew.ibx, Tnew.iby, '+', color='r', mew=1.5, ms=10, zorder=20)
+        plt.axis(ax)
+        ps.savefig()
+
+        
+
+    for tim,img in zip(tims, saved_images):
+        tim.data = img
+    
+    # C = make_coadds(tims, bands, targetwcs, mods=mods, xy=ixy,
+    #                 ngood=True, detmaps=True, psfsize=True, lanczos=lanczos,
+    #                 apertures=apertures, apxy=apxy,
+    #                 callback=write_coadd_images,
+    #                 callback_args=(survey, brickname, version_header, tims,
+    #                                targetwcs),
+    #                 plots=plots, ps=ps, mp=mp)
+
+    
+
 def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
                  T=None, cat=None, pixscale=None, plots=False,
@@ -2018,12 +2242,16 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
         dec = np.array([src.getPosition().dec for src in cat])
         ok,x0,y0 = targetwcs.radec2pixelxy(T.orig_ra, T.orig_dec)
         ok,x1,y1 = targetwcs.radec2pixelxy(ra, dec)
+        x0 -= 1
+        y0 -= 1
+        x1 -= 1
+        y1 -= 1
         dimshow(get_rgb(C.coimgs, bands, **rgbkwargs))
         ax = plt.axis()
         #plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
         for xx0,yy0,xx1,yy1 in zip(x0,y0,x1,y1):
-            plt.plot([xx0-1,xx1-1], [yy0-1,yy1-1], 'r-')
-        plt.plot(x1-1, y1-1, 'r.')
+            plt.plot([xx0,xx1], [yy0,yy1], 'r-')
+        plt.plot(x1, y1, 'r.')
         plt.axis(ax)
         plt.title('Original to final source positions')
         ps.savefig()
@@ -2065,6 +2293,8 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
                 r = rr + rd[:,0] * np.cos(np.deg2rad(dd))
                 d = dd + rd[:,1]
                 ok,xx,yy = targetwcs.radec2pixelxy(r, d)
+                xx -= 1
+                yy -= 1
                 x1,x2,x3 = xx[:3]
                 y1,y2,y3 = yy[:3]
                 plt.plot([x3, x1, x2], [y3, y1, y2], '-', color=c)
@@ -2820,10 +3050,11 @@ def run_brick(brick, survey, radec=None, pixscale=0.262,
 
         # wise_forced: see below
 
+        'redetect': 'fitblobs',
+        
         'fitplots': 'fitblobs',
         'psfplots': 'tims',
         'initplots': 'srcs',
-
         }
 
     if early_coadds:
