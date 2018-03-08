@@ -129,7 +129,9 @@ class OneBlob(object):
 
     def run(self, B):
         # Not quite so many plots...
-        self.plots1 = self.plots
+        self.plots1 = False
+        #self.plots1 = self.plots
+
         cat = Catalog(*self.srcs)
 
         tlast = Time()
@@ -288,14 +290,12 @@ class OneBlob(object):
         #   -fit, with Catalog([src])
         #   -subtract final model (from each tim)
         # -Replace original images
-    
+
         models = SourceModels()
         # Remember original tim images
         models.save_images(self.tims)
         # Create initial models for each tim x each source
-        # tt = Time()
         models.create(self.tims, cat, subtract=True)
-        # print('Subtracting initial models:', Time()-tt)
 
         N = len(cat)
         B.dchisq = np.zeros((N, 5), np.float32)
@@ -318,18 +318,11 @@ class OneBlob(object):
             models.add(srci, self.tims)
 
             if self.plots:
-                #plt.figure(2)
                 tr = self.tractor(self.tims, cat)
                 coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs,
                                            fill_holes=False)
-                # not using rgbkwargs_resid
-                #dimshow(get_rgb(coimgs,self.bands), ticks=False)
-                #plt.savefig('blob-%s-%i-bdata.png' % (self.name, srci))
                 rgb = get_rgb(coimgs,self.bands)
-                plt.imsave('blob-%s-%s-bdata.png' % (self.name, srci), rgb,
-                           origin='lower')
-                #plt.figure(1)
-
+                plt.imsave('blob-%s-%s-bdata.png' % (self.name, srci), rgb, origin='lower')
     
             if self.bigblob:
                 # if self.plots:
@@ -342,7 +335,7 @@ class OneBlob(object):
                 #         plt.plot(x, y, 'r.')
                 #     self.ps.savefig()
                 mods = [mod[srci] for mod in models.models]
-                srctims,modelMasks = _get_subimages(self.tims, mods, src)
+                srctims,modelMasks,srcslices = _get_subimages(self.tims, mods, src)
                 # if self.plots:
                 #     for j,tim in enumerate(srctims):
                 #         plt.subplot(len(srctims), 2, len(srctims)+j+1)
@@ -382,11 +375,14 @@ class OneBlob(object):
                 srctims = self.tims
                 srcwcs = self.blobwcs
                 srcpix = None
+                srcslices = None
 
             srctractor = self.tractor(srctims, [src])
             srctractor.setModelMasks(modelMasks)
             enable_galaxy_cache()
 
+            print('bigblob:', self.bigblob)
+            
             if self.plots1:
                 # This is a handy blob-coordinates plot of the data
                 # going into the fit.
@@ -411,6 +407,104 @@ class OneBlob(object):
                 #     plt.title(tim.name)
                 # plt.suptitle('Model Masks')
                 # self.ps.savefig()
+
+            # When fitting this source, zero out the invvars for pixels where other sources' models
+            # dominate (the data OR this source's model).
+
+            omods = []
+            for itim,tim in enumerate(srctims):
+                othermods = np.zeros_like(tim.getImage())
+
+                if srcslices is not None:
+                    fullmod = np.zeros_like(self.tims[itim].getImage())
+
+                for imod,mod in enumerate(models.models[itim]):
+                    if srci == imod:
+                        continue
+                    if mod is None:
+                        continue
+                    if srcslices is not None:
+                        slc = srcslices[itim]
+                        y0,y1 = slc[0].start, slc[0].stop
+                        x0,x1 = slc[1].start, slc[1].stop
+                        print('Slice for tim', itim, ':', slc)
+                        print('Model extent:', mod.getExtent())
+                        if not mod.overlapsBbox([x0, x1, y0, y1]):
+                            print('No overlap')
+                            continue
+                        mod.addTo(fullmod)
+                        submod = fullmod[slc]
+                        othermods += submod
+                        fullmod[slc] = 0
+                    else:
+                        mod.addTo(othermods)
+                omods.append(othermods)
+
+            if self.plots:
+                plt.clf()    
+                co,nil = quick_coadds(srctims, self.bands, self.blobwcs,
+                                      images=omods)
+                dimshow(get_rgb(co, self.bands), ticks=False)
+                plt.title('Model selection: other models')
+                self.ps.savefig()
+
+            for itim,tim in enumerate(srctims):
+                othermods = omods[itim]
+                tim.inverr[othermods > tim.data] = 0.
+
+            if self.plots:
+                plt.clf()    
+                co,nil = quick_coadds(srctims, self.bands, self.blobwcs)
+                dimshow(get_rgb(co, self.bands), ticks=False)
+                plt.title('Model selection: other models masked')
+                self.ps.savefig()
+                
+            minimgs = []
+            for tim in srctims:
+                x,y = tim.getWcs().positionToPixel(src.getPosition())
+                print('Tim', tim, 'source position', (x,y), 'in size',
+                      tim.shape)
+                x = int(np.round(x))
+                y = int(np.round(y))
+                h,w = tim.shape
+                dx = min(x, w-1-x)
+                dy = min(y, h-1-y)
+                x0,y0 = x - dx, y - dy
+                slc = slice(y0, y + dy+1), slice(x0, x + dx+1)
+                subimg = tim.getImage()[slc]
+                subie =  tim.getInvError()[slc]
+                flipped = np.fliplr(np.flipud(subimg))
+                flipie  = np.fliplr(np.flipud(subie))
+                minimg = subimg.copy()
+                #submask = self.blobmask[slc]
+                #flipmask = np.fliplr(np.flipud(submask))
+
+                from scipy.ndimage.filters import *
+                
+                # Take the neighbourhood max of the flipped image.
+                flipped = maximum_filter(flipped * (flipie>0), size=3)
+
+                I = ((flipie > 0) * (subie > 0) * (flipped < subimg))
+                minimg[I] = flipped[I]
+                #minimg[flipmask == False] = 0
+                img = tim.getImage().copy()
+                img[slc] = minimg
+                minimgs.append(img)
+
+                #### HACK -- this is ~okay for big blobs where we made
+                # a copy in the srctims, but otherwise? (or do the
+                # "models" saved tim data save us?)
+                tim.data = img
+
+
+                
+            if self.plots:
+                plt.clf()    
+                co,nil = quick_coadds(srctims, self.bands, self.blobwcs,
+                                      images=minimgs)
+                dimshow(get_rgb(co, self.bands), ticks=False)
+                plt.title('Model selection: symmetrized data')
+                self.ps.savefig()
                 
             if self.bigblob and self.plots:
                 # This is a local source-WCS plot of the data going into the
@@ -607,7 +701,7 @@ class OneBlob(object):
                             if mod.patch is None:
                                 mod = None
                         mods.append(mod)
-                    modtims,mm = _get_subimages(self.tims, mods, newsrc)
+                    modtims,mm,nil = _get_subimages(self.tims, mods, newsrc)
 
                 else:
                     mm = []
@@ -944,7 +1038,7 @@ class OneBlob(object):
                 # Make the subimages the same size as the modelMasks.
                 #tbb0 = Time()
                 mods = [mod[srci] for mod in models.models]
-                srctims,modelMasks = _get_subimages(self.tims, mods, src)
+                srctims,modelMasks,nil = _get_subimages(self.tims, mods, src)
                 #print('Creating srctims:', Time()-tbb0)
     
                 # We plots only the first & last three sources
@@ -1550,6 +1644,7 @@ def _initialize_models(src, rex):
 def _get_subimages(tims, mods, src):
     subtims = []
     modelMasks = []
+    slices = []
     #print('Big blob: trimming:')
     for tim,mod in zip(tims, mods):
         if mod is None:
@@ -1564,7 +1659,8 @@ def _get_subimages(tims, mods, src):
         x0,y0 = mod.x0 , mod.y0
         x1,y1 = x0 + mw, y0 + mh
         slc = slice(y0,y1), slice(x0, x1)
-
+        slices.append(slc)
+        
         subimg = tim.getImage()[slc]
         if subimg.shape != (mh,mw):
             print('Subimage shape:', subimg.shape, 'image shape',
@@ -1589,7 +1685,7 @@ def _get_subimages(tims, mods, src):
         subtim.meta = tim.meta
         subtims.append(subtim)
         #print('  ', tim.shape, 'to', subtim.shape)
-    return subtims, modelMasks
+    return subtims, modelMasks, slices
 
 class SourceModels(object):
     '''

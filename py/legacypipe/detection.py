@@ -318,7 +318,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     # "sedhot", which in turn is used to define the blobs that we will
     # optimize simultaneously.  This also determines which pixels go
     # into the fitting!
-    dilate = 8
+    dilate = 4
+    print('SETTING DILATION TO', dilate)
     hotblobs,nhot = label(binary_fill_holes(
             binary_dilation(peaks, iterations=dilate)))
 
