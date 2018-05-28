@@ -338,17 +338,17 @@ def get_version_header(program_name, survey_dir, git_version=None):
                         comment='legacypipe git version'))
     hdr.add_record(dict(name='SURVEYV', value=survey_dir,
                         comment='Legacy Survey directory'))
-    hdr.add_record(dict(name='DECALSDR', value='DR6',
+    hdr.add_record(dict(name='DECALSDR', value='DR7',
                         comment='DECaLS release name'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
                         comment='%s run time' % program_name))
     hdr.add_record(dict(name='SURVEY', value='DECaLS',
                         comment='DECam Legacy Survey'))
     # Requested by NOAO
-    #hdr.add_record(dict(name='SURVEYID', value='DECam Legacy Survey (DECaLS)',
-    #                    comment='Survey name'))
-    hdr.add_record(dict(name='SURVEYID', value='BASS MzLS',
+    hdr.add_record(dict(name='SURVEYID', value='DECam Legacy Survey (DECaLS)',
                         comment='Survey name'))
+    #hdr.add_record(dict(name='SURVEYID', value='BASS MzLS',
+    #                    comment='Survey name'))
     hdr.add_record(dict(name='DRVERSIO', value=release_number,
                         comment='Survey data release number'))
     hdr.add_record(dict(name='OBSTYPE', value='object',
@@ -839,6 +839,7 @@ class LegacySurveyData(object):
         from legacypipe.mosaic import MosaicImage
         from legacypipe.bok    import BokImage
         from legacypipe.ptf    import PtfImage
+        from legacypipe.cfht   import MegaPrimeImage
         from collections import OrderedDict
 
         if survey_dir is None:
@@ -879,6 +880,7 @@ Now using the current directory as LEGACY_SURVEY_DIR, but this is likely to fail
             'mosaic3': MosaicImage,
             '90prime': BokImage,
             'ptf'    : PtfImage,
+            'megaprime': MegaPrimeImage,
             }
 
         self.allbands = 'ugrizY'
@@ -1573,9 +1575,9 @@ Now using the current directory as LEGACY_SURVEY_DIR, but this is likely to fail
             row = self.ccds_index[(expnum, ccdname)]
             if self.ccds is not None:
                 return self.ccds[row]
-            import numpy as np
-            C = self.get_ccds(rows=np.array([row]))
-            return C[0]
+            #import numpy as np
+            #C = self.get_ccds(rows=np.array([row]))
+            #return C[0]
         T = self.get_ccds_readonly()
         if expnum is not None:
             T = T[T.expnum == expnum]
