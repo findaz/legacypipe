@@ -317,7 +317,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         imgsn = None
 
     if imgsn is not None:
-        imgpeaks = (imgsn > nsigma)
+        # Keep only image coadd peaks that are within detection-map peaks
+        # -- ie, we would like to able to resolve subpeaks, but we're not
+        # going to add entirely new blobs.
+        imgpeaks = (imgsn > nsigma) * (sedsn > nsigma)
         imgpeaks[0 ,:] = 0
         imgpeaks[:, 0] = 0
         imgpeaks[-1,:] = 0
@@ -456,6 +459,21 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     # brightest peaks first
     py,px = np.nonzero(peaks)
 
+    if ps is not None:
+        plt.clf()
+        plt.imshow(saddlemap, interpolation='nearest', origin='lower', vmin=0, vmax=1,
+                   cmap='gray')
+        ax = plt.axis()
+        plt.plot(px, py, 'r.')
+        if imgsn is not None:
+            plt.plot(imgx, imgy, 'b+')
+        plt.axis(ax)
+        plt.title('Detection-map (red) plus coadd image (blue) peaks')
+        ps.savefig()
+
+    assert(np.all(allblobs[py,px] >= 1))
+    assert(np.all(allblobs[imgy,imgx] >= 1))
+
     if imgsn is not None:
         px = np.append(px, imgx)
         py = np.append(py, imgy)
@@ -463,6 +481,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     I = np.argsort(-sedsn[py,px])
     py = py[I]
     px = px[I]
+
+    assert(np.all(allblobs[py,px] >= 1))
 
     keep = np.zeros(len(px), bool)
 
@@ -548,7 +568,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                        vmin=0, vmax=1, cmap='gray')
             ax = plt.axis()
             plt.plot(x, y, 'o', mec='r', mfc='r')
-            plt.plot(prevx, prevx, 'o', mec='r', mfc='none')
+            plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
             plt.title('saddle map (3)')
 
@@ -575,6 +595,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         level = saddle_level(snmap[y,x])
         ablob = allblobs[y,x]
         index = int(ablob - 1)
+        assert(index >= 0)
         slc = allslices[index]
 
         #print('source', i, 'of', len(px), 'at', x,y, 'S/N', sedsn[y,x], 'saddle', level)

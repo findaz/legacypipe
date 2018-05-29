@@ -1281,11 +1281,11 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
             plt.plot(sat.ibx, sat.iby, '+', color='r',
                      label='Saturated', **crossa)
         if len(refstars):
-            I = np.flatnonzero([r[0] == 'T' for r in refstars.ref_cat])
+            I, = np.nonzero([r[0] == 'T' for r in refstars.ref_cat])
             if len(I):
                 plt.plot(refstars.ibx[I], refstars.iby[I], '+', color=(0,1,1),
                          label='Tycho-2', **crossa)
-            I = np.flatnonzero([r[0] == 'G' for r in refstars.ref_cat])
+            I, = np.nonzero([r[0] == 'G' for r in refstars.ref_cat])
             if len(I):
                 plt.plot(refstars.ibx[I], refstars.iby[I], '+',
                          color=(0.2,0.2,1), label='Gaia', **crossa)
