@@ -500,7 +500,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         
         #print('Potential peak at', x,y)
         # These plots are turned off -- one plot per peak is a little excessive!
-        if False and ps is not None:
+        if (i==1849) and ps is not None:
             plt.clf()
             plt.subplot(2,2,1)
             plt.imshow(vetomap, interpolation='nearest', origin='lower',
@@ -554,7 +554,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
             ps.savefig()
 
-        print('Potential source at', x,y)
+        ## FIXME -- coadd image vs veto map
+
+        print('Potential source',i, 'at', x,y)
         if vetomap[y,x]:
             print('  in veto map!')
             continue
@@ -631,8 +633,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             plt.title('S/N')
             ps.savefig()
             
-        #if False and (not cut) and ps is not None:
-        if ps is not None:
+        if False and (not cut) and ps is not None:
+        #if ps is not None:
             plt.clf()
             #plt.subplot(1,2,1)
             dimshow(snmap, vmin=0, vmax=1.2*snmap[y,x], cmap='hot')
