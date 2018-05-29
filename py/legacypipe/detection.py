@@ -522,8 +522,6 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         # one of the test cases) that in turn require us to use
         # 'dilate=1'.
 
-        
-        #print('Potential peak at', x,y)
         # These plots are turned off -- one plot per peak is a little excessive!
         if (i==1849) and ps is not None:
             plt.clf()
@@ -585,16 +583,16 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         # Check the coadd image -- if high enough S/N, use that to
         # determine blendedness?
         if imgsn is not None:
-            print('S/N in detection map:', sedsn[y,x], 'vs coadd', imgsn[y,x])
+            #print('S/N in detection map:', sedsn[y,x], 'vs coadd', imgsn[y,x])
             sn = imgsn[y,x]
             if sn >= nsigma:
                 snmap = imgsn
                 vetomap = vetoimg
-                print('Using coadd rather than detection map to resolve source')
+                #print('Using coadd rather than detection map to resolve source')
 
-        print('Potential source',i, 'at', x,y)
+        #print('Potential source',i, 'at', x,y)
         if vetomap[y,x]:
-            print('  in veto map!')
+            #print('  in veto map!')
             continue
         
         level = saddle_level(snmap[y,x])
@@ -689,7 +687,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
         if cut:
             # in same blob as previously found source.
-            print('  cut')
+            #print('  cut')
             # update vetomap
             vetomap[slc] |= saddlemap
             continue
@@ -713,10 +711,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         #print('  aper', Time()-tlast)
         if cutonaper:
             if sedsn[y,x] - m < nsigma:
-                print('  cut based on aperture')
+                #print('  cut based on aperture')
                 continue
 
-        print('Keeping!')
+        #print('Keeping!')
         aper.append(m)
         peakval.append(sedsn[y,x])
         keep[i] = True
