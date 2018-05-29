@@ -499,7 +499,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     # the saddle heights of fainter sources.  Thus the vetomap isn't
     # the final word, it is just a quick veto of pixels we know for
     # sure will be vetoed.
-    vetomap = np.zeros(sedsn.shape, bool)
+    vetodet = np.zeros(sedsn.shape, bool)
+
+    if imgsn is not None:
+        # This is a veto map for when we're looking in the coadd image;
+        # it will have different blobs of vetoed pixels.
+        vetoimg = np.zeros_like(vetodet)
     
     # For each peak, determine whether it is isolated enough --
     # separated by a low enough saddle from other sources.  Need only
@@ -523,7 +528,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         if (i==1849) and ps is not None:
             plt.clf()
             plt.subplot(2,2,1)
-            plt.imshow(vetomap, interpolation='nearest', origin='lower',
+            plt.imshow(vetodet, interpolation='nearest', origin='lower',
                        cmap='gray', vmin=0, vmax=1)
             ax = plt.axis()
             plt.plot(x, y, 'o', mec='r', mfc='r')
@@ -531,7 +536,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             prevy = py[:i][keep[:i]]
             plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
-            plt.title('veto map')
+            plt.title('veto map (detmap)')
 
             plt.subplot(2,2,2)
             level = saddle_level(sedsn[y,x])
@@ -574,15 +579,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
             ps.savefig()
 
-        ## FIXME -- coadd image vs veto map
-
-        print('Potential source',i, 'at', x,y)
-        if vetomap[y,x]:
-            print('  in veto map!')
-            continue
-
         snmap = sedsn
-        
+        vetomap = vetodet
+
         # Check the coadd image -- if high enough S/N, use that to
         # determine blendedness?
         if imgsn is not None:
@@ -590,7 +589,13 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             sn = imgsn[y,x]
             if sn >= nsigma:
                 snmap = imgsn
+                vetomap = vetoimg
                 print('Using coadd rather than detection map to resolve source')
+
+        print('Potential source',i, 'at', x,y)
+        if vetomap[y,x]:
+            print('  in veto map!')
+            continue
         
         level = saddle_level(snmap[y,x])
         ablob = allblobs[y,x]
