@@ -84,7 +84,8 @@ def sed_matched_filters(bands):
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
                             targetwcs, nsigma=5, saturated_pix=None,
-                            plots=False, ps=None, mp=None):
+                            plots=False, ps=None, mp=None,
+                            coadds=None, coadd_ivs=None):
     '''
     Runs a given set of SED-matched filters.
 
@@ -158,7 +159,8 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         t0 = Time()
         sedhot,px,py,peakval,apval = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy,
-            nsigma=nsigma, saturated_pix=saturated_pix, ps=pps)
+            nsigma=nsigma, saturated_pix=saturated_pix, ps=pps,
+            coadds=coadds, coadd_ivs=coadd_ivs)
         print('SED took', Time()-t0)
         if sedhot is None:
             continue
@@ -204,7 +206,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                           saturated_pix=None,
                           saddle=2.,
                           cutonaper=True,
-                          ps=None):
+                          ps=None,
+                          coadds=None,
+                          coadd_ivs=None):
     '''
     Runs a single SED-matched detection filter.
 
@@ -278,6 +282,11 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     sedmap = np.zeros((H,W), np.float32)
     sediv  = np.zeros((H,W), np.float32)
+
+    if coadds is not None:
+        coimg = np.zeros((H,W), np.float32)
+        coiv  = np.zeros((H,W), np.float32)
+
     for iband,band in enumerate(bands):
         if sed[iband] == 0:
             continue
@@ -290,9 +299,66 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         #  = detmap / (sig1**2 * w)
         sedmap += detmaps[iband] * detivs[iband] / sed[iband]
         sediv  += detivs [iband] / sed[iband]**2
+
+        if coadds is not None:
+            coimg += coadds[iband] * coadd_ivs[iband] / sed[iband]
+            coiv  += coadd_ivs[iband] / sed[iband]**2
+
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
     del sedmap
+
+    if coadds is not None:
+        coimg /= np.maximum(1e-16, coiv)
+        imgsn   = coimg * np.sqrt(coiv)
+        del coimg
+        del coiv
+    else:
+        imgsn = None
+
+    if imgsn is not None:
+        # Keep only image coadd peaks that are within detection-map peaks
+        # -- ie, we would like to able to resolve subpeaks, but we're not
+        # going to add entirely new blobs.
+        imgpeaks = (imgsn > nsigma) * (sedsn > nsigma)
+        imgpeaks[0 ,:] = 0
+        imgpeaks[:, 0] = 0
+        imgpeaks[-1,:] = 0
+        imgpeaks[:,-1] = 0
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[0:-2,1:-1])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[2:  ,1:-1])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[1:-1,0:-2])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[1:-1,2:  ])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[0:-2,0:-2])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[0:-2,2:  ])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[2:  ,0:-2])
+        imgpeaks[1:-1, 1:-1] &= (imgsn[1:-1,1:-1] >= imgsn[2:  ,2:  ])
+        imgy,imgx = np.nonzero(imgpeaks)
+        
+    if ps is not None:
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=0, vmax=10)
+        plt.clf()
+        plt.imshow(sedsn, **ima)
+        plt.colorbar()
+        plt.title('SED %s: detection map S/N' % sedname)
+        ps.savefig()
+        if imgsn is not None:
+            plt.clf()
+            plt.subplot(1,2,1)
+            plt.imshow(imgsn, **ima)
+            plt.colorbar()
+            plt.title('SED %s: coadd S/N' % sedname)
+            plt.subplot(1,2,2)
+            plt.imshow(np.arcsinh(imgsn), interpolation='nearest',
+                       origin='lower', vmin=0)
+            ax = plt.axis()
+
+            plt.plot(imgx, imgy, '+', ms=12, mec='r', mew=2)
+
+            plt.axis(ax)
+            plt.title('coadd peaks, arcsinh')
+            ps.savefig()
 
     peaks = (sedsn > nsigma)
     print('SED sn:', Time()-t0)
@@ -339,18 +405,19 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         crossa = dict(ms=10, mew=1.5)
         green = (0,1,0)
 
-        def plot_boundary_map(X):
-            #bounds = binary_dilation(X) - X
+        def plot_boundary_map(X, x0=0, y0=0):
             bounds = np.logical_xor(binary_dilation(X), X)
             H,W = X.shape
             rgba = np.zeros((H,W,4), np.uint8)
             rgba[:,:,1] = bounds*255
             rgba[:,:,3] = bounds*255
-            plt.imshow(rgba, interpolation='nearest', origin='lower')
+            plt.imshow(rgba, interpolation='nearest', origin='lower',
+                       extent=[x0-0.5,x0+W-0.5,y0-0.5,y0+H-0.5])
 
         plt.clf()
         plt.subplot(1,2,2)
-        dimshow(sedsn, vmin=-2, vmax=100, cmap='hot', ticks=False)
+        dimshow(np.arcsinh(sedsn), vmin=-1, cmap='hot', ticks=False)
+
         plt.subplot(1,2,1)
         dimshow(sedsn, vmin=-2, vmax=10, cmap='hot', ticks=False)
         above = (sedsn > nsigma)
@@ -391,9 +458,31 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     # brightest peaks first
     py,px = np.nonzero(peaks)
+
+    if ps is not None:
+        plt.clf()
+        plt.imshow(saddlemap, interpolation='nearest', origin='lower', vmin=0, vmax=1,
+                   cmap='gray')
+        ax = plt.axis()
+        plt.plot(px, py, 'r.')
+        if imgsn is not None:
+            plt.plot(imgx, imgy, 'b+')
+        plt.axis(ax)
+        plt.title('Detection-map (red) plus coadd image (blue) peaks')
+        ps.savefig()
+
+    assert(np.all(allblobs[py,px] >= 1))
+    assert(np.all(allblobs[imgy,imgx] >= 1))
+
+    if imgsn is not None:
+        px = np.append(px, imgx)
+        py = np.append(py, imgy)
+
     I = np.argsort(-sedsn[py,px])
     py = py[I]
     px = px[I]
+
+    assert(np.all(allblobs[py,px] >= 1))
 
     keep = np.zeros(len(px), bool)
 
@@ -410,7 +499,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     # the saddle heights of fainter sources.  Thus the vetomap isn't
     # the final word, it is just a quick veto of pixels we know for
     # sure will be vetoed.
-    vetomap = np.zeros(sedsn.shape, bool)
+    vetodet = np.zeros(sedsn.shape, bool)
+
+    if imgsn is not None:
+        # This is a veto map for when we're looking in the coadd image;
+        # it will have different blobs of vetoed pixels.
+        vetoimg = np.zeros_like(vetodet)
     
     # For each peak, determine whether it is isolated enough --
     # separated by a low enough saddle from other sources.  Need only
@@ -419,12 +513,20 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     print('Found', len(px), 'potential peaks')
     #tlast = Time()
     for i,(x,y) in enumerate(zip(px, py)):
-        #print('Potential peak at', x,y)
+
+        # FIXME -- go through the "omit" list -- sources found in
+        # previous SEDs -- adding any that are brighter than this
+        # source to the "veto" map.
+
+        # This should help to eliminate off-by-a-pixel issues (eg in
+        # one of the test cases) that in turn require us to use
+        # 'dilate=1'.
+
         # These plots are turned off -- one plot per peak is a little excessive!
-        if False and ps is not None:
+        if (i==1849) and ps is not None:
             plt.clf()
             plt.subplot(2,2,1)
-            plt.imshow(vetomap, interpolation='nearest', origin='lower',
+            plt.imshow(vetodet, interpolation='nearest', origin='lower',
                        cmap='gray', vmin=0, vmax=1)
             ax = plt.axis()
             plt.plot(x, y, 'o', mec='r', mfc='r')
@@ -432,7 +534,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             prevy = py[:i][keep[:i]]
             plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
-            plt.title('veto map')
+            plt.title('veto map (detmap)')
 
             plt.subplot(2,2,2)
             level = saddle_level(sedsn[y,x])
@@ -469,41 +571,48 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                        vmin=0, vmax=1, cmap='gray')
             ax = plt.axis()
             plt.plot(x, y, 'o', mec='r', mfc='r')
-            plt.plot(prevx, prevx, 'o', mec='r', mfc='none')
+            plt.plot(prevx, prevy, 'o', mec='r', mfc='none')
             plt.axis(ax)
             plt.title('saddle map (3)')
 
             ps.savefig()
 
+        snmap = sedsn
+        vetomap = vetodet
+
+        # Check the coadd image -- if high enough S/N, use that to
+        # determine blendedness?
+        if imgsn is not None:
+            #print('S/N in detection map:', sedsn[y,x], 'vs coadd', imgsn[y,x])
+            sn = imgsn[y,x]
+            if sn >= nsigma:
+                snmap = imgsn
+                vetomap = vetoimg
+                #print('Using coadd rather than detection map to resolve source')
+
+        #print('Potential source',i, 'at', x,y)
         if vetomap[y,x]:
             #print('  in veto map!')
             continue
-        #t0 = Time()
-        #t1 = Time()
-        #print('Time since last source:', t1-tlast)
-        #tlast = t1
-
-        level = saddle_level(sedsn[y,x])
+        
+        level = saddle_level(snmap[y,x])
         ablob = allblobs[y,x]
         index = int(ablob - 1)
+        assert(index >= 0)
         slc = allslices[index]
 
         #print('source', i, 'of', len(px), 'at', x,y, 'S/N', sedsn[y,x], 'saddle', level)
         #print('  allblobs slice', slc)
 
-        saddlemap = (sedsn[slc] > level)
+        saddlemap = (snmap[slc] > level)
         saddlemap = binary_dilation(saddlemap, iterations=dilate)
         if saturated_pix is not None:
             saddlemap |= saturated_pix[slc]
         saddlemap *= (allblobs[slc] == ablob)
-        #print('  saddlemap', Time()-tlast)
         saddlemap = binary_fill_holes(saddlemap)
-        #print('  fill holes', Time()-tlast)
         blobs,nblobs = label(saddlemap)
-        #print('  label', Time()-tlast)
         x0,y0 = allx0[index], ally0[index]
         thisblob = blobs[y-y0, x-x0]
-
         saddlemap *= (blobs == thisblob)
         
         # previously found sources:
@@ -526,7 +635,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             j = I[0]
             plt.clf()
             plt.subplot(1,2,1)
-            plt.imshow(sedsn, cmap='hot', interpolation='nearest', origin='lower')
+            plt.imshow(snmap, cmap='hot', interpolation='nearest', origin='lower')
             ax = plt.axis()
             plt.plot([ox[j]+x0, x], [oy[j]+y0, y], 'g-')
             plt.axis(ax)
@@ -538,52 +647,49 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             for s in range(-3, steps+3):
                 ix = int(np.round(x + (dx / dist) * s))
                 iy = int(np.round(y + (dy / dist) * s))
-                ss.append(sedsn[np.clip(iy, 0, H-1), np.clip(ix, 0, W-1)])
+                ss.append(snmap[np.clip(iy, 0, H-1), np.clip(ix, 0, W-1)])
             plt.subplot(1,2,2)
             plt.plot(ss)
-            plt.axhline(sedsn[y,x], color='k')
-            plt.axhline(sedsn[py[j],px[j]], color='r')
+            plt.axhline(snmap[y,x], color='k')
+            plt.axhline(snmap[py[j],px[j]], color='r')
             plt.axhline(level)
             plt.xticks([])
             plt.title('S/N')
             ps.savefig()
             
         if False and (not cut) and ps is not None:
+        #if ps is not None:
             plt.clf()
-            plt.subplot(1,2,1)
-            dimshow(sedsn, vmin=-2, vmax=10, cmap='hot')
-            plot_boundary_map((sedsn > nsigma))
+            #plt.subplot(1,2,1)
+            dimshow(snmap, vmin=0, vmax=1.2*snmap[y,x], cmap='hot')
             ax = plt.axis()
+            plot_boundary_map(saddlemap, x0=x0, y0=y0)
             plt.plot(x, y, 'm+', ms=12, mew=2)
-            plt.axis(ax)
 
-            plt.subplot(1,2,2)
-            y1,x1 = [s.stop for s in slc]
-            ext = [x0,x1,y0,y1]
-            dimshow(saddlemap, extent=ext)
-            #plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'c-')
-            #ax = plt.axis()
-            #plt.plot(ox+x0, oy+y0, 'rx')
+            # plt.subplot(1,2,2)
+            # y1,x1 = [s.stop for s in slc]
+            # ext = [x0,x1,y0,y1]
+            # dimshow(saddlemap, extent=ext)
+            # #plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'c-')
+            # #ax = plt.axis()
+            # #plt.plot(ox+x0, oy+y0, 'rx')
+
             plt.plot(xomit, yomit, 'rx', ms=8, mew=2)
             plt.plot(px[:i][keep[:i]], py[:i][keep[:i]], '+',
                      color=green, ms=8, mew=2)
-            plt.plot(x, y, 'mo', mec='m', mfc='none', ms=12, mew=2)
+            #plt.plot(x, y, 'mo', mec='m', mfc='none', ms=12, mew=2)
             plt.axis(ax)
             if cut:
-                plt.suptitle('Cut')
+                plt.suptitle('Cut %i,%i' % (x,y))
             else:
-                plt.suptitle('Keep')
+                plt.suptitle('Keep %i,%i' % (x,y))
             ps.savefig()
-
-        #t1 = Time()
-        #print(t1 - t0)
 
         if cut:
             # in same blob as previously found source.
             #print('  cut')
             # update vetomap
             vetomap[slc] |= saddlemap
-            #print('Added to vetomap:', np.sum(saddlemap), 'pixels set; now total of', np.sum(vetomap), 'pixels set')
             continue
 
         # Measure in aperture...
@@ -605,8 +711,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         #print('  aper', Time()-tlast)
         if cutonaper:
             if sedsn[y,x] - m < nsigma:
+                #print('  cut based on aperture')
                 continue
 
+        #print('Keeping!')
         aper.append(m)
         peakval.append(sedsn[y,x])
         keep[i] = True

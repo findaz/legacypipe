@@ -1094,6 +1094,7 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
                survey=None, brick=None,
                gaia_stars=False,
                record_event=None,
+               lanczos=True,
                **kwargs):
     '''
     In this stage we run SED-matched detection to find objects in the
@@ -1248,13 +1249,18 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
         ps.savefig()
     del satmap
 
+    # Create coadds for use in deblending
+    from legacypipe.coadds import make_coadds
+    C = make_coadds(tims, bands, targetwcs, lanczos=lanczos, mp=mp)
+    
     # SED-matched detections
     record_event and record_event('stage_srcs: SED-matched')
     print('Running source detection at', nsigma, 'sigma')
     SEDs = survey.sed_matched_filters(bands)
     Tnew,newcat,hot = run_sed_matched_filters(
         SEDs, bands, detmaps, detivs, (avoid_x,avoid_y), targetwcs,
-        nsigma=nsigma, saturated_pix=saturated_pix, plots=plots, ps=ps, mp=mp)
+        nsigma=nsigma, saturated_pix=saturated_pix, plots=plots, ps=ps, mp=mp,
+        coadds=C.coimgs, coadd_ivs=C.cowimgs)
     if Tnew is None:
         raise NothingToDoError('No sources detected.')
     Tnew.delete_column('peaksn')
@@ -1297,11 +1303,11 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
             plt.plot(sat.ibx, sat.iby, '+', color='r',
                      label='Saturated', **crossa)
         if len(refstars):
-            I = np.flatnonzero([r[0] == 'T' for r in refstars.ref_cat])
+            I, = np.nonzero([r[0] == 'T' for r in refstars.ref_cat])
             if len(I):
                 plt.plot(refstars.ibx[I], refstars.iby[I], '+', color=(0,1,1),
                          label='Tycho-2', **crossa)
-            I = np.flatnonzero([r[0] == 'G' for r in refstars.ref_cat])
+            I, = np.nonzero([r[0] == 'G' for r in refstars.ref_cat])
             if len(I):
                 plt.plot(refstars.ibx[I], refstars.iby[I], '+',
                          color=(0.2,0.2,1), label='Gaia', **crossa)
@@ -2195,6 +2201,7 @@ def stage_coadds(survey=None, bands=None, version_header=None, targetwcs=None,
 
     for name,ims,rgbkw in coadd_list:
         rgb = get_rgb(ims, bands, **rgbkw)
+        #rgb = sdss_rgb(ims, bands)
         kwa = {}
         if coadd_bw and len(bands) == 1:
             rgb = rgb.sum(axis=2)
