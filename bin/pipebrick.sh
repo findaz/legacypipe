@@ -9,6 +9,8 @@ source ../bin/bashrc
 
 export PYTHONPATH=${PYTHONPATH}:.
 
+echo "PYTHONPATH: ${PYTHONPATH}"
+
 # Force MKL single-threaded
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
@@ -17,7 +19,7 @@ export MKL_NUM_THREADS=1
 ulimit -S -v 30000000
 ulimit -a
 
-outdir=$LEGACY_SURVEY_DIR
+outdir=/global/cscratch1/sd/dstn/dr7-lg
 
 # First (only) command-line arg is the brick name.
 brick="$1"
@@ -45,8 +47,6 @@ echo "--------------------------------------------------------------------------
 
 python -u legacypipe/runbrick.py \
     --max-blobsize  250000 \
-    --normalize-psf \
-    --gaia \
     --skip-calibs \
     --checkpoint $outdir/checkpoints/${bri}/checkpoint-${brick}.pickle \
     --pickle "$outdir/pickles/${bri}/runbrick-%(brick)s-%%(stage)s.pickle" \

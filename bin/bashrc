@@ -1,7 +1,7 @@
 ## bashrc snippet for setting up environment for runbrick.py
 
 unset PYTHONPATH
-
+module unload desiconda
 
 export NERSC_HOST=`/usr/common/usg/bin/nersc_host`
 
@@ -29,8 +29,12 @@ if [ $NERSC_HOST == "edison" ]; then
   module use /global/common/software/desi/edison/desiconda/20180512-1.2.5-img/modulefiles
   module load desiconda/20180512-1.2.5-img
 else # cori
-  module use /global/cscratch1/sd/desiproc/DRcode/desiconda/software/modulefiles
-  module load desiconda/20180511
+  #module use /global/cscratch1/sd/desiproc/DRcode/desiconda/software/modulefiles
+  #module load desiconda/20180511
+  module use /global/common/$NERSC_HOST/contrib/desi/modulefiles
+  module load desiconda/20170719-1.1.9-imaging
+  export PYTHONPATH=~/astrometry:${PYTHONPATH}
+  export PYTHONPATH=~/tractor:${PYTHONPATH}
 fi
 
 # Add legacypipe directory to python path
@@ -39,8 +43,10 @@ fi
 #? export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${PYTHON_DIR}/lib
 
 # local qdo install?
-# PATH=${PATH}:${CODE_DIR}/qdo/bin
-# PYTHONPATH=${PYTHONPATH}:${CODE_DIR}/qdo
+export PATH=${PATH}:~/qdo/bin
+export PYTHONPATH=${PYTHONPATH}:~/qdo
+
+python -c "import qdo; print(qdo.__file__); import qdo.console; print(qdo.console.__file__)"
 
 # local Tractor install?
 # PYTHONPATH=${CODE_DIR}/tractor:${PYTHONPATH}
