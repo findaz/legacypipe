@@ -1318,9 +1318,18 @@ def stage_srcs(targetrd=None, pixscale=None, targetwcs=None,
         plt.legend(loc='upper left')
         ps.savefig()
 
+        plt.clf()
+        plt.subplot(1,2,1)
+        dimshow(hot, vmin=0, vmax=1, cmap='hot')
+        plt.title('hot')
+        plt.subplot(1,2,2)
+        dimshow(saturated_pix, vmin=0, vmax=1, cmap='hot')
+        plt.title('saturated_pix')
+        ps.savefig()
+
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(
-        hot, T, name=brickname, ps=ps, plots=plots)
+        np.logical_or(hot, saturated_pix), T, name=brickname, ps=ps, plots=plots)
     del hot
 
     tnow = Time()
