@@ -1,6 +1,7 @@
 ## bashrc snippet for setting up environment for runbrick.py
 
 unset PYTHONPATH
+
 module unload desiconda
 
 export NERSC_HOST=`/usr/common/usg/bin/nersc_host`
@@ -25,19 +26,12 @@ export TYCHO2_KD_DIR=/global/project/projectdirs/cosmo/staging/tycho2
 export PS1CAT_DIR=/global/project/projectdirs/cosmo/work/ps1/cats/chunks-qz-star-v3/
 
 # desiconda
-if [ $NERSC_HOST == "edison" ]; then
-  module use /global/common/software/desi/edison/desiconda/20180512-1.2.5-img/modulefiles
-  module load desiconda/20180512-1.2.5-img
-else # cori
-  #module use /global/cscratch1/sd/desiproc/DRcode/desiconda/software/modulefiles
-  #module load desiconda/20180511
-  module use /global/common/$NERSC_HOST/contrib/desi/modulefiles
-  module load desiconda/20170719-1.1.9-imaging
-  export PYTHONPATH=~/astrometry:${PYTHONPATH}
-  export PYTHONPATH=~/tractor:${PYTHONPATH}
-fi
+desiconda_version=20180512-1.2.5-img
+module use /global/common/software/desi/$NERSC_HOST/desiconda/$desiconda_version/modulefiles
+module load desiconda
 
 # Add legacypipe directory to python path
+# (not required if you're running the code from the legacypipe/py directory)
 # PYTHONPATH=${LEGACY_PIPE_DIR}/py:${PYTHONPATH}
 
 #? export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${PYTHON_DIR}/lib
@@ -46,18 +40,9 @@ fi
 export PATH=${PATH}:~/qdo/bin
 export PYTHONPATH=${PYTHONPATH}:~/qdo
 
-python -c "import qdo; print(qdo.__file__); import qdo.console; print(qdo.console.__file__)"
-
 # local Tractor install?
 # PYTHONPATH=${CODE_DIR}/tractor:${PYTHONPATH}
 
 # local astrometry.net install?
 # PYTHONPATH=${CODE_DIR}/astrometry/lib/python:${PYTHONPATH}
-
-export QDO_BATCH_PROFILE=$NERSC_HOST
-export QDO_BACKEND=postgres
-export QDO_DB_NAME=desirun
-export QDO_DB_HOST=nerscdb03.nersc.gov
-export QDO_DB_USER=desirun_admin
-# export QDO_DB_PASS=super-secret
 
