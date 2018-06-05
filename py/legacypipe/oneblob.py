@@ -100,6 +100,11 @@ class OneBlob(object):
         self.srcs = srcs
         self.bands = bands
         self.plots = plots
+
+        self.plots_per_source = False
+        # blob-1-data.png, etc
+        self.plots_single = False
+
         self.ps = ps
         self.simul_opt = simul_opt
         self.use_ceres = use_ceres
@@ -165,23 +170,25 @@ class OneBlob(object):
         if self.plots:
             self._plots(tr, 'After source fitting')
 
+            plt.clf()
             self._plot_coadd(self.tims, self.blobwcs, model=tr)
             plt.title('After source fitting')
             self.ps.savefig()
 
-            plt.figure(2)
-            mods = list(tr.getModelImages())
-            coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs, images=mods,
-                                       fill_holes=False)
-            dimshow(get_rgb(coimgs,self.bands), ticks=False)
-            plt.savefig('blob-%s-initmodel.png' % (self.name))
-            res = [(tim.getImage() - mod) for tim,mod in zip(self.tims, mods)]
-            coresids,nil = quick_coadds(self.tims, self.bands, self.blobwcs, images=res)
-            dimshow(get_rgb(coresids, self.bands, **rgbkwargs_resid), ticks=False)
-            plt.savefig('blob-%s-initresid.png' % (self.name))
-            dimshow(get_rgb(coresids, self.bands), ticks=False)
-            plt.savefig('blob-%s-initsub.png' % (self.name))
-            plt.figure(1)
+            if self.plots_single:
+                plt.figure(2)
+                mods = list(tr.getModelImages())
+                coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs, images=mods,
+                                           fill_holes=False)
+                dimshow(get_rgb(coimgs,self.bands), ticks=False)
+                plt.savefig('blob-%s-initmodel.png' % (self.name))
+                res = [(tim.getImage() - mod) for tim,mod in zip(self.tims, mods)]
+                coresids,nil = quick_coadds(self.tims, self.bands, self.blobwcs, images=res)
+                dimshow(get_rgb(coresids, self.bands, **rgbkwargs_resid), ticks=False)
+                plt.savefig('blob-%s-initresid.png' % (self.name))
+                dimshow(get_rgb(coresids, self.bands), ticks=False)
+                plt.savefig('blob-%s-initsub.png' % (self.name))
+                plt.figure(1)
 
 
         print('Blob', self.name, 'finished initial fitting:', Time()-tlast)
@@ -194,6 +201,9 @@ class OneBlob(object):
         tlast = Time()
 
         if self.plots:
+            self._plots(tr, 'After model selection')
+
+        if self.plots_single:
             plt.figure(2)
             mods = list(tr.getModelImages())
             coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs, images=mods,
@@ -249,6 +259,9 @@ class OneBlob(object):
             nsrcparams = src.numberOfParams()
             _convert_ellipses(src)
             assert(src.numberOfParams() == nsrcparams)
+            # print('Computing variances for source', src, ': N params:', nsrcparams)
+            # print('Source params:')
+            # src.printThawedParams()
             # For Gaia sources, temporarily convert the GaiaPosition to a
             # RaDecPos in order to compute the invvar it would have in our
             # imaging?  Or just plug in the Gaia-measured uncertainties??
@@ -257,6 +270,7 @@ class OneBlob(object):
             allderivs = tr.getDerivs()
             ivars = _compute_invvars(allderivs)
             assert(len(ivars) == nsrcparams)
+            #print('Inverse-variances:', ivars)
             B.srcinvvars[isub] = ivars
             assert(len(B.srcinvvars[isub]) == cat[isub].numberOfParams())
             cat.freezeParam(isub)
@@ -264,8 +278,8 @@ class OneBlob(object):
         # Check for sources with zero inverse-variance -- I think these
         # can be generated during the "Simultaneous re-opt" stage above --
         # sources can get scattered outside the blob.
-        # Arbitrarily look at the first element (RA) for this cut.
-        I = np.flatnonzero(np.array([iv[0] for iv in B.srcinvvars]))
+
+        I, = np.nonzero([np.sum(iv) > 0 for iv in B.srcinvvars])
         if len(I) < len(B):
             print('Keeping', len(I), 'of', len(B),'sources with non-zero ivar')
             B.cut(I)
@@ -319,8 +333,8 @@ class OneBlob(object):
             # Add this source's initial model back in.
             models.add(srci, self.tims)
 
-            if self.plots:
-                #plt.figure(2)
+            if self.plots_single:
+                plt.figure(2)
                 tr = self.tractor(self.tims, cat)
                 coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs,
                                            fill_holes=False)
@@ -330,7 +344,7 @@ class OneBlob(object):
                 rgb = get_rgb(coimgs,self.bands)
                 plt.imsave('blob-%s-%s-bdata.png' % (self.name, srci), rgb,
                            origin='lower')
-                #plt.figure(1)
+                plt.figure(1)
 
     
             if self.bigblob:
@@ -389,7 +403,7 @@ class OneBlob(object):
             srctractor.setModelMasks(modelMasks)
             enable_galaxy_cache()
 
-            if self.plots1:
+            if self.plots_per_source:
                 # This is a handy blob-coordinates plot of the data
                 # going into the fit.
                 plt.clf()
@@ -414,7 +428,7 @@ class OneBlob(object):
                 # plt.suptitle('Model Masks')
                 # self.ps.savefig()
                 
-            if self.bigblob and self.plots:
+            if self.bigblob and self.plots_per_source:
                 # This is a local source-WCS plot of the data going into the
                 # fit.
                 plt.clf()
@@ -423,13 +437,12 @@ class OneBlob(object):
                 dimshow(get_rgb(coimgs, self.bands))
                 plt.title('Model selection: stage1 data (srcwcs)')
                 self.ps.savefig()
-                if self.plots1:
-                    self._plots(srctractor, 'Model selection init')
 
-                    # srch,srcw = srcwcs.shape
-                    # _plot_mods(srctims, [list(srctractor.getModelImages())], srcwcs,
-                    #            ['Model selection init'], self.bands, None,None,
-                    #            None, srcw,srch, self.ps, chi_plots=False)
+                self._plots(srctractor, 'Model selection init')
+                # srch,srcw = srcwcs.shape
+                # _plot_mods(srctims, [list(srctractor.getModelImages())], srcwcs,
+                #            ['Model selection init'], self.bands, None,None,
+                #            None, srcw,srch, self.ps, chi_plots=False)
 
             if self.deblend:
                 # Create tims with the deblending-weighted pixels.
@@ -649,7 +662,7 @@ class OneBlob(object):
                     modtractor.optimize_loop(maxcpu=60., **self.optargs)
                     #print('Mod selection: after second-round opt:', newsrc)
 
-                    if self.plots1:
+                    if self.plots_per_source:
                         plt.clf()
                         modimgs = list(modtractor.getModelImages())
                         comods,nil = quick_coadds(modtims, self.bands, srcwcs,
@@ -795,7 +808,7 @@ class OneBlob(object):
             #         self.ps.savefig()
                         
             # This is the model-selection plot
-            if self.plots:
+            if self.plots_per_source:
                 from collections import OrderedDict
                 subplots = []
                 plt.clf()
@@ -857,14 +870,15 @@ class OneBlob(object):
                 self.ps.savefig()
 
                 # Save individual plots (for the paper)
-                for name,rgb in subplots:
-                    plt.figure(2)
-                    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
-                    dimshow(rgb, ticks=False)
-                    fn = 'blob-%s-%i-%s.png' % (self.name, srci, name)
-                    plt.savefig(fn)
-                    print('Wrote', fn)
-                    plt.figure(1)
+                if self.plots_single:
+                    for name,rgb in subplots:
+                        plt.figure(2)
+                        plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
+                        dimshow(rgb, ticks=False)
+                        fn = 'blob-%s-%i-%s.png' % (self.name, srci, name)
+                        plt.savefig(fn)
+                        print('Wrote', fn)
+                        plt.figure(1)
 
             B.dchisq[srci, :] = np.array([chisqs.get(k,0) for k in modnames])
             B.sources[srci] = keepsrc
@@ -874,7 +888,7 @@ class OneBlob(object):
             models.update_and_subtract(srci, keepsrc, self.tims)
 
 
-            if self.plots:
+            if self.plots_single:
                 plt.figure(2)
                 tr = self.tractor(self.tims, cat)
                 #mods = list(tr.getModelImages())
@@ -884,7 +898,7 @@ class OneBlob(object):
                 dimshow(get_rgb(coimgs,self.bands), ticks=False)
                 plt.savefig('blob-%s-%i-sub.png' % (self.name, srci))
                 plt.figure(1)
-    
+
             #print('Keeping model:', keepmod)
             #print('Keeping source:', keepsrc)
             cpu1 = time.clock()
@@ -959,7 +973,7 @@ class OneBlob(object):
                 #print('Creating srctims:', Time()-tbb0)
     
                 # We plots only the first & last three sources
-                if self.plots and (numi < 3 or numi >= len(Ibright)-3):
+                if self.plots_per_source and (numi < 3 or numi >= len(Ibright)-3):
                     plt.clf()
                     # Recompute coadds because of the subtract-all-and-readd shuffle
                     coimgs,cons = quick_coadds(self.tims, self.bands, self.blobwcs,
@@ -1115,17 +1129,18 @@ class OneBlob(object):
         plt.title('Blob: %s' % self.name)
         self.ps.savefig()
 
-        plt.figure(2)
-        dimshow(self.rgb, ticks=False)
-        plt.savefig('blob-%s-data.png' % (self.name))
-        plt.figure(1)
+        if self.plots_single:
+            plt.figure(2)
+            dimshow(self.rgb, ticks=False)
+            plt.savefig('blob-%s-data.png' % (self.name))
+            plt.figure(1)
 
         ok,x0,y0 = self.blobwcs.radec2pixelxy(
             np.array([src.getPosition().ra  for src in self.srcs]),
             np.array([src.getPosition().dec for src in self.srcs]))
 
         ax = plt.axis()
-        plt.plot(x0, y0, 'r.')
+        plt.plot(x0-1, y0-1, 'r.')
         plt.axis(ax)
         plt.title('initial sources')
         self.ps.savefig()
