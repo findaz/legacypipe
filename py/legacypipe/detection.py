@@ -33,26 +33,24 @@ def _detmap(X):
 def detection_maps(tims, targetwcs, bands, mp):
     # Render the detection maps
     H,W = targetwcs.shape
-    detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    satmap  = np.zeros((H,W), np.uint8)
+    ibands = dict([(b,i) for i,b in enumerate(bands)])
+
+    detmaps = [np.zeros((H,W), np.float32) for b in bands]
+    detivs  = [np.zeros((H,W), np.float32) for b in bands]
+    satmaps = [np.zeros((H,W), bool)       for b in bands]
     for tim, (Yo,Xo,incmap,inciv,sat) in zip(
         tims, mp.map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
         if Yo is None:
             continue
-        detmaps[tim.band][Yo,Xo] += incmap * inciv
-        detivs [tim.band][Yo,Xo] += inciv
+        ib = ibands[tim.band]
+        detmaps[ib][Yo,Xo] += incmap * inciv
+        detivs [ib][Yo,Xo] += inciv
         if sat is not None:
-            satmap       [Yo,Xo] += sat
+            satmaps[ib][Yo,Xo] |= sat
 
-    for band in bands:
-        detmaps[band] /= np.maximum(1e-16, detivs[band])
-
-    # back into lists, not dicts
-    detmaps = [detmaps[b] for b in bands]
-    detivs  = [detivs [b] for b in bands]
-        
-    return detmaps, detivs, satmap
+    for detmap,detiv in zip(detmaps, detivs):
+        detmap /= np.maximum(1e-16, detiv)
+    return detmaps, detivs, satmaps
 
 def sed_matched_filters(bands):
     '''
@@ -107,7 +105,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         returned Tractor PointSource objects.
     nsigma : float, optional
         Detection threshold
-    saturated_pix : None or numpy array, boolean
+    saturated_pix : None or list of numpy arrays, booleans
         Passed through to sed_matched_detection.
         A map of pixels that are always considered "hot" when
         determining whether a new source touches hot pixels of an
@@ -231,7 +229,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         Previously known sources that are to be avoided.
     nsigma : float, optional
         Detection threshold.
-    saturated_pix : None or numpy array, boolean
+    saturated_pix : None or list of numpy arrays, boolean
         A map of pixels that are always considered "hot" when
         determining whether a new source touches hot pixels of an
         existing source.
@@ -287,6 +285,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         coimg = np.zeros((H,W), np.float32)
         coiv  = np.zeros((H,W), np.float32)
 
+    if saturated_pix is not None:
+        satur  = np.zeros((H,W), bool)
+
     for iband,band in enumerate(bands):
         if sed[iband] == 0:
             continue
@@ -303,6 +304,9 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         if coadds is not None:
             coimg += coadds[iband] * coadd_ivs[iband] / sed[iband]
             coiv  += coadd_ivs[iband] / sed[iband]**2
+
+        if saturated_pix is not None:
+            satur |= saturated_pix[iband]
 
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
@@ -450,7 +454,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     saddlemap = (sedsn > lowest_saddle)
     saddlemap = binary_dilation(saddlemap, iterations=dilate)
     if saturated_pix is not None:
-        saddlemap |= saturated_pix
+        saddlemap |= satur
     allblobs,nblobs = label(saddlemap)
     allslices = find_objects(allblobs)
     ally0 = [sy.start for sy,sx in allslices]
@@ -542,7 +546,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             saddlemap = (sedsn > level)
             saddlemap = binary_dilation(saddlemap, iterations=dilate)
             if saturated_pix is not None:
-                saddlemap |= saturated_pix
+                saddlemap |= satur
             saddlemap *= (allblobs == ablob)
             plt.imshow(saddlemap, interpolation='nearest', origin='lower',
                        vmin=0, vmax=1, cmap='gray')
@@ -607,7 +611,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         saddlemap = (snmap[slc] > level)
         saddlemap = binary_dilation(saddlemap, iterations=dilate)
         if saturated_pix is not None:
-            saddlemap |= saturated_pix[slc]
+            saddlemap |= satur[slc]
         saddlemap *= (allblobs[slc] == ablob)
         saddlemap = binary_fill_holes(saddlemap)
         blobs,nblobs = label(saddlemap)
@@ -779,7 +783,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"
     *T*: source table; only ".ibx" and ".iby" elements are used (x,y integer
-        pix pos).  Note: ".blob" field is added.
+    pix pos).  Note: ".blob" field is added.
     *name*: for debugging only
 
     Returns: (blobs, blobsrcs, blobslices)
