@@ -45,7 +45,7 @@ class EllipseWithPriors(EllipseESoft):
         return cls(logr, ee1, ee2)
 
     def isLegal(self):
-        return self.logre < +5.
+        return self.logre < +3.9
 
     @classmethod
     def getName(cls):
