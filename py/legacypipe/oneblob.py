@@ -101,7 +101,7 @@ class OneBlob(object):
         self.bands = bands
         self.plots = plots
 
-        self.plots_per_source = False
+        self.plots_per_source = True
         # blob-1-data.png, etc
         self.plots_single = False
 
@@ -591,6 +591,7 @@ class OneBlob(object):
                 #print('Optimizing: first round for', name, ':', len(srctims))
                 #print(newsrc)
                 cpustep0 = time.clock()
+                print('First-round opt:', newsrc)
                 srctractor.optimize_loop(**self.optargs)
                 #print('Optimizing first round', name, 'took',
                 #      time.clock()-cpustep0)
@@ -658,7 +659,8 @@ class OneBlob(object):
                     modtractor = self.tractor(modtims, [newsrc])
                     modtractor.setModelMasks(mm)
                     enable_galaxy_cache()
-    
+
+                    print('Second-round opt:', newsrc)
                     modtractor.optimize_loop(maxcpu=60., **self.optargs)
                     #print('Mod selection: after second-round opt:', newsrc)
 
@@ -742,6 +744,21 @@ class OneBlob(object):
             keepmod = _select_model(chisqs, nparams, galaxy_margin, self.rex)
             keepsrc = {'none':None, 'ptsrc':ptsrc, simname:simple,
                        'dev':dev, 'exp':exp, 'comp':comp}[keepmod]
+
+            print('Model selection: keeping', keepsrc)
+            
+            # DROP bad needle galaxies.
+            if keepmod == 'dev':
+                print('DeV model:', dev)
+                print('DeV model.  Brightness:', dev.getBrightness())
+                flux = np.sum(np.abs(dev.getBrightness().getParams()))
+                surfbright = 0.5 * flux / (np.pi * dev.shape.re**2)
+                print('Total flux:', flux, '-> SB', surfbright)
+                if surfbright < 1e-3:  # 30 mag/arcsec^2
+                    print('Dropping faint surface brightness galaxy')
+                    keepmod = 'none'
+                    keepsrc = None
+
             bestchi = chisqs.get(keepmod, 0.)
 
             if keepsrc is not None and bestchi == 0.:
