@@ -748,11 +748,19 @@ class OneBlob(object):
             print('Model selection: keeping', keepsrc)
             
             # DROP bad needle galaxies.
-            if keepmod == 'dev':
-                print('DeV model:', dev)
-                print('DeV model.  Brightness:', dev.getBrightness())
-                flux = np.sum(np.abs(dev.getBrightness().getParams()))
-                surfbright = 0.5 * flux / (np.pi * dev.shape.re**2)
+            if keepmod in ['dev', 'exp', 'comp']:
+                print('Model:', dev)
+                br = keepsrc.getBrightness()
+                print('Brightness:', br)
+                flux = np.sum(np.abs(br.getParams()))
+                if keepmod == 'dev':
+                    re = keepsrc.shape.re
+                elif keepmod == 'exp':
+                    re = keepsrc.shape.re
+                else:
+                    re = (keepsrc.shapeDev.re * keepsrc.fracDev +
+                          keepsrc.shapeExp.re * (1. - keepsrc.fracDev))
+                surfbright = 0.5 * flux / (np.pi * re**2)
                 print('Total flux:', flux, '-> SB', surfbright)
                 if surfbright < 1e-3:  # 30 mag/arcsec^2
                     print('Dropping faint surface brightness galaxy')
