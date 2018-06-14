@@ -758,8 +758,8 @@ class OneBlob(object):
                 elif keepmod == 'exp':
                     re = keepsrc.shape.re
                 else:
-                    re = (keepsrc.shapeDev.re * keepsrc.fracDev +
-                          keepsrc.shapeExp.re * (1. - keepsrc.fracDev))
+                    re = (keepsrc.shapeDev.re * keepsrc.fracDev.clipped() +
+                          keepsrc.shapeExp.re * (1. - keepsrc.fracDev.clipped()))
                 surfbright = 0.5 * flux / (np.pi * re**2)
                 print('Total flux:', flux, '-> SB', surfbright)
                 if surfbright < 1e-3:  # 30 mag/arcsec^2
