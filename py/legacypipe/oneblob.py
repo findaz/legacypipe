@@ -101,7 +101,7 @@ class OneBlob(object):
         self.bands = bands
         self.plots = plots
 
-        self.plots_per_source = True
+        self.plots_per_source = plots
         # blob-1-data.png, etc
         self.plots_single = False
 
